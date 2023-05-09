@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package protos;
+
+import "chunk_server.proto";
+
+message FileMetadata {
+
+}
+
+message FileChunkMetadata {
+    // UUID
+    string chunk_handle = 1;
+
+    // chunk's version, newly created file chunk's verison is always 1
+    uint32 version = 2;
+
+    ChunkServerLocation primary_location = 3;
+
+    // the location information used by the client to cache the chunkserver
+    repeated ChunkServerLocation locations = 4;
+}

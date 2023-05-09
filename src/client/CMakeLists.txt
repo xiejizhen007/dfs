@@ -4,6 +4,6 @@ add_executable(client ${client_sources})
 
 target_link_libraries(client
     PRIVATE
-        libproto
+        protos_shared
         common_shared
 )

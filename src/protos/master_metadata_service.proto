@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package protos.grpc;
+
+import "google/protobuf/empty.proto";
+// import "src/protos/metadata.proto";
+import "metadata.proto";
+
+service MasterMetadataService {
+    rpc OpenFile(OpenFileRequest) returns (OpenFileRespond) {}
+
+    rpc DeleteFile(DeleteFileRequest) returns (google.protobuf.Empty) {}
+}
+
+message OpenFileRequest {
+    string filename = 1;
+
+    uint32 chunk_index = 2;
+
+    enum OpenMode {
+        READ = 0;
+        WRITE = 1;
+        CREATE = 2;
+    };
+
+    OpenMode mode = 3;
+}
+
+message OpenFileRespond {
+    OpenFileRequest request = 1;
+
+    protos.FileChunkMetadata metadata = 2;
+}
+
+message DeleteFileRequest {
+    string filename = 1;
+}

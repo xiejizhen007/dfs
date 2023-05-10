@@ -87,7 +87,8 @@ TEST_F(LockManagerTest, CheckErrorCases) {
     auto create_lock_or = lockManager_->CreateLock("/again");
     EXPECT_TRUE(create_lock_or.ok());
     auto create_again_lock_or = lockManager_->CreateLock("/again");
-    EXPECT_TRUE(google::protobuf::util::IsAlreadyExists(create_again_lock_or.status()));
+    EXPECT_TRUE(
+        google::protobuf::util::IsAlreadyExists(create_again_lock_or.status()));
 
     auto non_exist_lock_or = lockManager_->FetchLock("/nonexist");
     EXPECT_EQ(non_exist_lock_or.ok(), false);

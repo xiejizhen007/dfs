@@ -5,7 +5,10 @@ package protos;
 import "chunk_server.proto";
 
 message FileMetadata {
+    string filename = 1;
 
+    // <chunk index, chunk handle>
+    map<uint32, string> chunk_handles = 2;
 }
 
 message FileChunkMetadata {

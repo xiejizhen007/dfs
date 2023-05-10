@@ -17,3 +17,14 @@ target_link_libraries(lock_manager_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
 )
+
+add_executable(metadata_manager_test
+    server/master_server/metadata_manager_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
+)
+
+target_link_libraries(metadata_manager_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+)

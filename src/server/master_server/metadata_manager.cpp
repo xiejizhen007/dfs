@@ -21,7 +21,7 @@ MetadataManager* MetadataManager::GetInstance() {
 }
 
 bool MetadataManager::ExistFileMetadata(const std::string& filename) {
-    return file_metadatas_.contains(filename);
+    return file_metadatas_.Contains(filename);
 }
 
 google::protobuf::util::Status MetadataManager::CreateFileMetadata(
@@ -49,24 +49,22 @@ google::protobuf::util::Status MetadataManager::CreateFileMetadata(
     auto new_file_metadata(std::make_shared<FileMetadata>());
     new_file_metadata->set_filename(filename);
 
-    absl::WriterMutexLock lock_guard(&lock_);
-    if (file_metadatas_.contains(filename)) {
+    if (!file_metadatas_.TryInsert(filename, new_file_metadata)) {
         return AlreadyExistsError(filename + " metadata is already exist");
     }
-
-    file_metadatas_[filename] = new_file_metadata;
 
     return OkStatus();
 }
 
 google::protobuf::util::StatusOr<std::shared_ptr<FileMetadata>>
 MetadataManager::GetFileMetadata(const std::string& filename) {
-    absl::ReaderMutexLock lock_guard(&lock_);
-    if (!file_metadatas_.contains(filename)) {
-        return NotFoundError(filename + " metadata not found");
+    auto value_pair = file_metadatas_.TryGet(filename);
+    if (!value_pair.second) {
+        return google::protobuf::util::NotFoundError(
+            "no metadata in file_metadatas_, filename: " + filename);
     }
 
-    return file_metadatas_[filename];
+    return value_pair.first;
 }
 
 google::protobuf::util::StatusOr<std::string>
@@ -100,6 +98,8 @@ MetadataManager::CreateChunkHandle(const std::string& filename,
         new_chunk_handle = AllocateNewChunkHandle();
         file_metadata->set_filename(filename);
 
+        // 文件锁锁不住，需要额外加一个锁
+        absl::WriterMutexLock lock_guard(&lock_);
         auto& chunk_handles = (*file_metadata->mutable_chunk_handles());
         if (chunk_handles.contains(chunk_index)) {
             return google::protobuf::util::AlreadyExistsError(
@@ -109,7 +109,6 @@ MetadataManager::CreateChunkHandle(const std::string& filename,
 
         // 将键值 <chunk_index, chunk_handle> 插入 map 表中
         chunk_handles[chunk_index] = new_chunk_handle;
-        count_.fetch_add(1);
     }
 
     // 设置好新的 chunk_metadata，插入 map<chunk_handle, chunk_metadata> 中
@@ -154,13 +153,14 @@ google::protobuf::util::StatusOr<std::string> MetadataManager::GetChunkHandle(
 
 google::protobuf::util::StatusOr<protos::FileChunkMetadata>
 MetadataManager::GetFileChunkMetadata(const std::string& chunk_handle) {
-    absl::ReaderMutexLock lock_guard(&lock_);
-    if (!chunk_metadatas_.contains(chunk_handle)) {
+    auto value_pair = chunk_metadatas_.TryGet(chunk_handle);
+
+    if (!value_pair.second) {
         return google::protobuf::util::NotFoundError(
             "chunk_handle metadata does not exist");
     }
 
-    return chunk_metadatas_.at(chunk_handle);
+    return value_pair.first;
 }
 
 google::protobuf::util::Status MetadataManager::IncFileChunkVersion(
@@ -180,15 +180,38 @@ google::protobuf::util::Status MetadataManager::IncFileChunkVersion(
 void MetadataManager::SetFileChunkMetadata(
     const protos::FileChunkMetadata& metadata) {
     // 将 metadata 注册到 chunk_metadatas_ 中
-    absl::WriterMutexLock lock_guard(&lock_);
     const std::string& chunk_handle = metadata.chunk_handle();
-    chunk_metadatas_[chunk_handle] = metadata;
+    chunk_metadatas_.Set(chunk_handle, metadata);
 }
 
 void MetadataManager::DeleteFileAndChunkMetadata(const std::string& filename) {
-    absl::WriterMutexLock lock_guard(&lock_);
-    file_metadatas_.erase(filename);
-    chunk_metadatas_.erase(filename);
+    // step 1: Lock the parent directory first(readerlock)
+    ParentLocks plocks(lock_manager_, filename);
+    if (!plocks.ok()) {
+        return;
+    }
+
+    // step 2: get the file lock
+    auto file_lock_or = lock_manager_->FetchLock(filename);
+    if (!file_lock_or.ok()) {
+        return;
+    }
+
+    // writerlock on file
+    absl::WriterMutexLock file_lock_guard(file_lock_or.value());
+
+    // step 3: clear up all filechunk
+    auto file_metadata_or = GetFileMetadata(filename);
+    if (!file_metadata_or.ok()) {
+        return;
+    }
+
+    auto file_matadata = file_metadata_or.value();
+    file_metadatas_.Erase(filename);
+
+    for (auto& chunk_handle : file_matadata->chunk_handles()) {
+        chunk_metadatas_.Erase(chunk_handle.second);
+    }
 }
 
 std::string MetadataManager::AllocateNewChunkHandle() {

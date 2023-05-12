@@ -101,7 +101,7 @@ TEST_F(MetadataManagerTest, CreateSameFileMetadataInParallel) {
     for (int i = 0; i < numOfThreads; i++) {
         threads.push_back(std::thread([&, i] {
             auto status_or = metadataManager_->CreateChunkHandle(filename, i);
-            // EXPECT_EQ(status_or.value(), std::to_string(i));
+            EXPECT_TRUE(status_or.ok());
         }));
     }
 
@@ -116,54 +116,59 @@ TEST_F(MetadataManagerTest, CreateSameFileMetadataInParallel) {
     auto file_metadata = file_metadata_or.value();
     auto& chunk_handles = *file_metadata->mutable_chunk_handles();
     EXPECT_EQ(chunk_handles.size(), numOfThreads);
-    // EXPECT_EQ(metadataManager_->count_.load(), numOfThreads);
-    // EXPECT_EQ(metadataManager_->count_.load(), numOfThreads + 1);
+    EXPECT_EQ(file_metadata->chunk_handles_size(), numOfThreads);
 
     for (int i = 0; i < numOfThreads; i++) {
         uset.insert(chunk_handles[i]);
     }
 
     EXPECT_EQ(uset.size(), numOfThreads);
+
+    for (int i = 0; i < numOfThreads; i++) {
+        EXPECT_TRUE(chunk_handles.contains(i));
+    }
+    EXPECT_EQ(chunk_handles.size(), numOfThreads);
 }
 
-// TEST_F(MetadataManagerTest, CreateFileInParallelWithOverlap) {
-//     int numOfThread = 2;
-//     int numChunkPerFile = 100;
+TEST_F(MetadataManagerTest, CreateFileInParallelWithOverlap) {
+    int numOfThread = 50;
+    int numChunkPerFile = 100;
 
-//     const std::string filename = "/CreateFileInParallelWithOverlap";
+    const std::string filename = "/CreateFileInParallelWithOverlap";
 
-//     // 确保文件存在
-//     auto create_file_metadata_or =
-//     metadataManager_->CreateFileMetadata(filename);
-//     EXPECT_TRUE(create_file_metadata_or.ok());
+    // 确保文件存在
+    auto create_file_metadata_or =
+        metadataManager_->CreateFileMetadata(filename);
+    EXPECT_TRUE(create_file_metadata_or.ok());
 
-//     std::atomic<int> count = 0;
+    std::atomic<int> count = 0;
 
-//     std::vector<std::thread> threads;
-//     for (int i = 0; i < numOfThread; i++) {
-//         threads.push_back(std::thread([&, i] () {
-//             for (int chunk_id = 0; chunk_id < numChunkPerFile; chunk_id++) {
-//                 auto status_or =
-//                 metadataManager_->CreateChunkHandle(filename, chunk_id); if
-//                 (status_or.ok()) {
-//                     count++;
-//                 } else {
-//                     EXPECT_TRUE(google::protobuf::util::IsAlreadyExists(status_or.status()));
-//                 }
-//             }
-//         }));
-//     }
+    std::vector<std::thread> threads;
+    for (int i = 0; i < numOfThread; i++) {
+        threads.push_back(std::thread([&, i]() {
+            for (int chunk_id = 0; chunk_id < numChunkPerFile; chunk_id++) {
+                auto status_or =
+                    metadataManager_->CreateChunkHandle(filename, chunk_id);
+                if (status_or.ok()) {
+                    count++;
+                } else {
+                    EXPECT_TRUE(google::protobuf::util::IsAlreadyExists(
+                        status_or.status()));
+                }
+            }
+        }));
+    }
 
-//     for (auto& thread: threads) {
-//         thread.join();
-//     }
+    for (auto& thread : threads) {
+        thread.join();
+    }
 
-//     threads.clear();
+    threads.clear();
 
-//     EXPECT_EQ(count.load(), numChunkPerFile);
+    EXPECT_EQ(count.load(), numChunkPerFile);
 
-//     auto file_metadata_or = metadataManager_->GetFileMetadata(filename);
-//     EXPECT_TRUE(file_metadata_or.ok());
-//     auto file_metadata = file_metadata_or.value();
-//     EXPECT_EQ(file_metadata->chunk_handles_size(), numChunkPerFile);
-// }
+    auto file_metadata_or = metadataManager_->GetFileMetadata(filename);
+    EXPECT_TRUE(file_metadata_or.ok());
+    auto file_metadata = file_metadata_or.value();
+    EXPECT_EQ(file_metadata->chunk_handles_size(), numChunkPerFile);
+}

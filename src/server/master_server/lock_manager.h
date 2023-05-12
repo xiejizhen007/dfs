@@ -8,6 +8,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/synchronization/mutex.h"
 #include "google/protobuf/stubs/statusor.h"
+#include "src/common/utils.h"
 
 namespace dfs {
 namespace server {
@@ -26,9 +27,8 @@ class LockManager {
         const std::string& filename);
 
    private:
-    absl::flat_hash_map<std::string, std::shared_ptr<absl::Mutex>>
+    dfs::common::parallel_hash_map<std::string, std::shared_ptr<absl::Mutex>>
         filepath_locks_;
-    absl::Mutex lock_;
 };
 
 // 对于文件 /a/b/c，ParentLocks 依次对 a，b 进行加锁

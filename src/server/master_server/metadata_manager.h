@@ -6,6 +6,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "google/protobuf/stubs/statusor.h"
 #include "metadata.pb.h"
+#include "src/common/utils.h"
 #include "src/server/master_server/lock_manager.h"
 
 namespace dfs {
@@ -41,8 +42,6 @@ class MetadataManager {
 
     void DeleteFileAndChunkMetadata(const std::string& filename);
 
-    std::atomic<int> count_ = 0;
-
    private:
     MetadataManager();
 
@@ -52,13 +51,15 @@ class MetadataManager {
     LockManager* lock_manager_;
 
     // key: filename
-    absl::flat_hash_map<std::string, std::shared_ptr<protos::FileMetadata>>
+    dfs::common::parallel_hash_map<std::string,
+                                   std::shared_ptr<protos::FileMetadata>>
         file_metadatas_;
 
     // key: chunk_handle
-    absl::flat_hash_map<std::string, protos::FileChunkMetadata>
+    dfs::common::parallel_hash_map<std::string, protos::FileChunkMetadata>
         chunk_metadatas_;
 
+    //
     absl::Mutex lock_;
 
     // 用于给每个 chunk 分配 uuid

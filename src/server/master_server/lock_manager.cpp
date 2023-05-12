@@ -12,19 +12,16 @@ LockManager* LockManager::GetInstance() {
 }
 
 bool LockManager::ExistLock(const std::string& filename) {
-    absl::ReaderMutexLock lock_guard(&lock_);
-    return filepath_locks_.contains(filename);
+    return filepath_locks_.Contains(filename);
 }
 
 google::protobuf::util::StatusOr<absl::Mutex*> LockManager::CreateLock(
     const std::string& filename) {
-    absl::WriterMutexLock lock_guard(&lock_);
     std::shared_ptr<absl::Mutex> file_lock(new absl::Mutex());
-    if (filepath_locks_.contains(filename)) {
+
+    if (!filepath_locks_.TryInsert(filename, file_lock)) {
         return google::protobuf::util::AlreadyExistsError(
             "Lock already exists for " + filename);
-    } else {
-        filepath_locks_[filename] = file_lock;
     }
 
     return file_lock.get();
@@ -32,13 +29,13 @@ google::protobuf::util::StatusOr<absl::Mutex*> LockManager::CreateLock(
 
 google::protobuf::util::StatusOr<absl::Mutex*> LockManager::FetchLock(
     const std::string& filename) {
-    absl::ReaderMutexLock lock_guard(&lock_);
-    if (!filepath_locks_.contains(filename)) {
+    auto value_pair = filepath_locks_.TryGet(filename);
+    if (!value_pair.second) {
         return google::protobuf::util::NotFoundError("Lock not found for " +
                                                      filename);
     }
 
-    return filepath_locks_[filename].get();
+    return value_pair.first.get();
 }
 
 ParentLocks::ParentLocks(LockManager* lock_manager,

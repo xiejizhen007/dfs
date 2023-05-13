@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package protos.grpc;
+
+// 
+service ChunkServerControlService {
+    rpc SendHeartBeat(SendHeartBeatRequest) returns (SendHeartBeatRespond) {}
+}
+
+message SendHeartBeatRequest {
+
+}
+
+message SendHeartBeatRespond {
+    SendHeartBeatRequest request = 1;
+}

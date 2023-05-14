@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package protos.grpc;
+
+import "chunk_server.proto";
+import "metadata.proto";
+
+service ChunkServerManagerService {
+    rpc ReportChunkServer(ReportChunkServerRequest) returns (ReportChunkServerRespond) {}
+}
+
+message ReportChunkServerRequest {
+    protos.ChunkServer chunk_server = 1;
+
+    repeated protos.FileChunkMetadata metadatas = 2;
+}
+
+message ReportChunkServerRespond {
+    ReportChunkServerRequest request = 1;
+}

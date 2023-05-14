@@ -13,6 +13,7 @@ set(proto_files
     ${PROJECT_SOURCE_DIR}/src/protos/metadata.proto
     ${PROJECT_SOURCE_DIR}/src/protos/master_metadata_service.proto
     ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_control_service.proto
+    ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_file_service.proto
     # hello.proto
     # chunk_server.proto
     # metadata.proto

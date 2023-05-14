@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package protos.grpc;
+
+import "chunk_server.proto";
+
+service ChunkServerFileService {
+    rpc ReadFileChunk(ReadFileChunkRequest) returns(ReadFileChunkRespond) {}
+
+    rpc WriteFileChunk(WriteFileChunkRequest) returns(WriteFileChunkRespond) {}
+}
+
+message ReadFileChunkRequest {
+    string chunk_handle = 1;
+
+    uint32 version = 2;
+
+    uint32 offset = 3;
+
+    uint32 length = 4;
+}
+
+message ReadFileChunkRespond {
+    ReadFileChunkRequest request = 1;
+
+    bytes data = 2;
+
+    uint32 read_length = 3;
+
+    enum ReadFileChunkRespondStatus {
+        UNKNOW = 0;
+        OK = 1;
+        NOT_FOUND = 2;
+        OUT_OF_RANGE = 3;
+        VERSION_ERROR = 4;
+    };
+
+    ReadFileChunkRespondStatus status = 4;
+}
+
+message WriteFileChunkRequestHeader {
+    string chunk_handle = 1;
+
+    uint32 version = 2;
+
+    uint32 offset = 3;
+
+    uint32 length = 4;
+
+    bytes data = 5;
+}
+message WriteFileChunkRequest {
+    WriteFileChunkRequestHeader header = 1;
+
+    // The location of the chunkserver where this special chunk is located
+    repeated ChunkServerLocation locations = 2;
+}
+
+message WriteFileChunkRespond {
+    WriteFileChunkRequest request = 1;
+
+    uint32 write_length = 2;
+}

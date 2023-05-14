@@ -51,9 +51,10 @@ google::protobuf::util::Status FileChunkManager::CreateChunk(
 }
 
 google::protobuf::util::StatusOr<std::string> FileChunkManager::ReadFromChunk(
-    const std::string& chunk_handle, const uint32_t& offset,
-    const uint32_t& length) {
-    auto file_chunk_or = GetFileChunk(chunk_handle);
+    const std::string& chunk_handle, const uint32_t& version,
+    const uint32_t& offset, const uint32_t& length) {
+    // get the specified verison of the chunk
+    auto file_chunk_or = GetFileChunk(chunk_handle, version);
     if (!file_chunk_or.ok()) {
         return file_chunk_or.status();
     }
@@ -70,9 +71,10 @@ google::protobuf::util::StatusOr<std::string> FileChunkManager::ReadFromChunk(
 }
 
 google::protobuf::util::StatusOr<uint32_t> FileChunkManager::WriteToChunk(
-    const std::string& chunk_handle, const uint32_t& offset,
-    const uint32_t& length, const std::string& data) {
-    auto file_chunk_or = GetFileChunk(chunk_handle);
+    const std::string& chunk_handle, const uint32_t& version,
+    const uint32_t& offset, const uint32_t& length, const std::string& data) {
+    // get the specified verison of the chunk
+    auto file_chunk_or = GetFileChunk(chunk_handle, version);
     if (!file_chunk_or.ok()) {
         return file_chunk_or.status();
     }
@@ -99,9 +101,10 @@ google::protobuf::util::StatusOr<uint32_t> FileChunkManager::WriteToChunk(
 }
 
 google::protobuf::util::StatusOr<uint32_t> FileChunkManager::AppendToChunk(
-    const std::string& chunk_handle, const uint32_t& length,
-    const std::string& data) {
-    auto file_chunk_or = GetFileChunk(chunk_handle);
+    const std::string& chunk_handle, const uint32_t& version,
+    const uint32_t& length, const std::string& data) {
+    // get the specified verison of the chunk
+    auto file_chunk_or = GetFileChunk(chunk_handle, version);
     if (!file_chunk_or.ok()) {
         return file_chunk_or.status();
     }
@@ -162,6 +165,47 @@ FileChunkManager::GetAllFileChunkMetadata() {
     return metadatas;
 }
 
+google::protobuf::util::Status FileChunkManager::UpdateChunkVersion(
+    const std::string& chunk_handle, const uint32_t& old_version,
+    const uint32_t& new_version) {
+    // get the specified verison of the chunk
+    auto file_chunk_or = GetFileChunk(chunk_handle, old_version);
+    if (!file_chunk_or.ok()) {
+        return file_chunk_or.status();
+    }
+
+    auto file_chunk = file_chunk_or.value();
+    file_chunk->set_version(new_version);
+
+    // write change back to db
+    auto status = WriteFileChunk(chunk_handle, *file_chunk.get());
+    if (!status.ok()) {
+        return google::protobuf::util::UnknownError("");
+    }
+
+    // update chunk_verisons in memory
+    chunk_versions_.Set(chunk_handle, new_version);
+
+    return google::protobuf::util::OkStatus();
+}
+
+google::protobuf::util::StatusOr<uint32_t> FileChunkManager::GetChunkVersion(
+    const std::string& chunk_handle) {
+    auto value_pair = chunk_versions_.TryGet(chunk_handle);
+    if (!value_pair.second) {
+        auto chunk_or = GetFileChunk(chunk_handle);
+        if (!chunk_or.ok()) {
+            return chunk_or.status();
+        }
+
+        uint32_t version = chunk_or.value()->version();
+        chunk_versions_.Set(chunk_handle, version);
+        return version;
+    }
+
+    return value_pair.first;
+}
+
 google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
 FileChunkManager::GetFileChunk(const std::string& chunk_handle) {
     leveldb::ReadOptions options;
@@ -181,6 +225,23 @@ FileChunkManager::GetFileChunk(const std::string& chunk_handle) {
     }
 
     return chunk;
+}
+
+google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
+FileChunkManager::GetFileChunk(const std::string& chunk_handle,
+                               const uint32_t& version) {
+    auto chunk_or = GetFileChunk(chunk_handle);
+    if (!chunk_or.ok()) {
+        return chunk_or.status();
+    }
+
+    if (chunk_or.value()->version() != version) {
+        return google::protobuf::util::NotFoundError(
+            "no chunk found for the specified version, handle: " +
+            chunk_handle + " version: " + std::to_string(version));
+    }
+
+    return chunk_or.value();
 }
 
 }  // namespace server

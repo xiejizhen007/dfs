@@ -10,6 +10,7 @@
 #include "google/protobuf/stubs/statusor.h"
 #include "leveldb/db.h"
 #include "metadata.pb.h"
+#include "src/common/utils.h"
 
 namespace dfs {
 namespace server {
@@ -28,17 +29,18 @@ class FileChunkManager {
                                                const uint32_t& chunk_version);
 
     google::protobuf::util::StatusOr<std::string> ReadFromChunk(
-        const std::string& chunk_handle, const uint32_t& offset,
-        const uint32_t& length);
+        const std::string& chunk_handle, const uint32_t& version,
+        const uint32_t& offset, const uint32_t& length);
 
     // 将指定长度的数据写入至指定 uuid chunk 偏移 offset 处。
     google::protobuf::util::StatusOr<uint32_t> WriteToChunk(
-        const std::string& chunk_handle, const uint32_t& offset,
-        const uint32_t& length, const std::string& data);
+        const std::string& chunk_handle, const uint32_t& version,
+        const uint32_t& offset, const uint32_t& length,
+        const std::string& data);
 
     google::protobuf::util::StatusOr<uint32_t> AppendToChunk(
-        const std::string& chunk_handle, const uint32_t& length,
-        const std::string& data);
+        const std::string& chunk_handle, const uint32_t& version,
+        const uint32_t& length, const std::string& data);
 
     google::protobuf::util::Status DeleteChunk(const std::string& chunk_handle);
 
@@ -49,11 +51,26 @@ class FileChunkManager {
     // when chunkserver starts, report the stored chunkmetadata to master
     std::list<protos::FileChunkMetadata> GetAllFileChunkMetadata();
 
+    google::protobuf::util::Status UpdateChunkVersion(
+        const std::string& chunk_handle, const uint32_t& old_version,
+        const uint32_t& new_version);
+
+    google::protobuf::util::StatusOr<uint32_t> GetChunkVersion(
+        const std::string& chunk_handle);
+
    private:
     FileChunkManager() = default;
 
+    // get the specified chunk from the db
     google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
     GetFileChunk(const std::string& chunk_handle);
+
+    // get the specified chunk of the specified version from the db
+    google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
+    GetFileChunk(const std::string& chunk_handle, const uint32_t& version);
+
+    // <chunk_handle, version>
+    dfs::common::parallel_hash_map<std::string, uint32_t> chunk_versions_;
 
     // chunk database
     std::unique_ptr<leveldb::DB> chunk_db_;

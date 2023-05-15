@@ -10,6 +10,11 @@ namespace server {
 class ChunkServerFileServiceImpl final
     : public protos::grpc::ChunkServerFileService::Service {
    public:
+    grpc::Status InitFileChunk(
+        grpc::ServerContext* context,
+        const protos::grpc::InitFileChunkRequest* request,
+        protos::grpc::InitFileChunkRespond* respond) override;
+
     grpc::Status ReadFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::ReadFileChunkRequest* request,
@@ -22,6 +27,10 @@ class ChunkServerFileServiceImpl final
 
    private:
     FileChunkManager* file_chunk_manager();
+
+    grpc::Status WriteFileChunkLocally(
+        const protos::grpc::WriteFileChunkRequestHeader& header,
+        protos::grpc::WriteFileChunkRespond* respond);
 };
 
 }  // namespace server

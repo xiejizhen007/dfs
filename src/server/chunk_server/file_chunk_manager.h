@@ -21,7 +21,8 @@ class FileChunkManager {
    public:
     static FileChunkManager* GetInstance();
 
-    bool Initialize(const std::string& chunk_dbname);
+    bool Initialize(const std::string& chunk_dbname,
+                    const uint32_t& max_bytes_per_chunk);
 
     // interacting with leveldb
 
@@ -74,6 +75,9 @@ class FileChunkManager {
 
     // chunk database
     std::unique_ptr<leveldb::DB> chunk_db_;
+
+    // max bytes per chunk
+    uint32_t max_bytes_per_chunk_;
 };
 
 }  // namespace server

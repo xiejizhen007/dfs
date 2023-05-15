@@ -10,6 +10,31 @@ FileChunkManager* ChunkServerFileServiceImpl::file_chunk_manager() {
     return FileChunkManager::GetInstance();
 }
 
+grpc::Status ChunkServerFileServiceImpl::InitFileChunk(
+    grpc::ServerContext* context,
+    const protos::grpc::InitFileChunkRequest* request,
+    protos::grpc::InitFileChunkRespond* respond) {
+    // get requested parameters
+    const std::string& chunk_handle = request->chunk_handle();
+
+    // add log
+
+    //
+    auto status = file_chunk_manager()->CreateChunk(chunk_handle, 1);
+    if (status.ok()) {
+        // successfully created
+        respond->set_status(protos::grpc::InitFileChunkRespond::CREATED);
+        return grpc::Status::OK;
+    } else if (google::protobuf::util::IsAlreadyExists(status)) {
+        // already exist
+        respond->set_status(protos::grpc::InitFileChunkRespond::ALREADY_EXISTS);
+        return grpc::Status::OK;
+    } else {
+        // internal error
+        return dfs::common::StatusProtobuf2Grpc(status);
+    }
+}
+
 grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     grpc::ServerContext* context,
     const protos::grpc::ReadFileChunkRequest* request,
@@ -28,12 +53,42 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     auto read_status_or = file_chunk_manager()->ReadFromChunk(
         chunk_handle, version, offset, length);
     if (!read_status_or.ok()) {
-        LOG(ERROR) << "fail to read chunk, status: " +
-                          read_status_or.status().ToString();
         if (google::protobuf::util::IsNotFound(read_status_or.status())) {
-            respond->set_status(protos::grpc::ReadFileChunkRespond::NOT_FOUND);
+            // 检查是不是版本不一致导致的
+            auto version_status_ok =
+                file_chunk_manager()->GetChunkVersion(chunk_handle);
+            if (version_status_ok.ok()) {
+                if (version_status_ok.value() != version) {
+                    // 版本不一致导致读不到
+                    respond->set_status(
+                        protos::grpc::ReadFileChunkRespond::VERSION_ERROR);
+                } else {
+                    // 能到这吗？
+                    return dfs::common::StatusProtobuf2Grpc(
+                        version_status_ok.status());
+                }
+            } else if (google::protobuf::util::IsNotFound(
+                           version_status_ok.status())) {
+                // 压根没有对应的 chunk
+                respond->set_status(
+                    protos::grpc::ReadFileChunkRespond::NOT_FOUND);
+            } else {
+                // internal error
+                return dfs::common::StatusProtobuf2Grpc(
+                    version_status_ok.status());
+            }
+        } else if (google::protobuf::util::IsOutOfRange(
+                       read_status_or.status())) {
+            respond->set_status(
+                protos::grpc::ReadFileChunkRespond::OUT_OF_RANGE);
+        } else {
+            return dfs::common::StatusProtobuf2Grpc(read_status_or.status());
         }
-        return dfs::common::StatusProtobuf2Grpc(read_status_or.status());
+
+        // 对于 not found, version error, out of range 这三类错误，在 respond
+        // 已经设置了错误码，所以只需要返回 ok，表明当前 rpc 操作正常
+        // 如果是其他类型的错误，返回错误状态
+        return grpc::Status::OK;
     }
 
     const auto& read_data = read_status_or.value();
@@ -51,22 +106,40 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
     protos::grpc::WriteFileChunkRespond* respond) {
     // get requested parameters
     const auto& header = request->header();
-    const auto& chunk_handle = header.chunk_handle();
-    const auto& version = header.version();
-    const auto& offset = header.offset();
-    const auto& length = header.length();
-    const auto& data = header.data();
 
-    auto write_status_or = file_chunk_manager()->WriteToChunk(
-        chunk_handle, version, offset, length, data);
-
-    if (!write_status_or.ok()) {
-        return dfs::common::StatusProtobuf2Grpc(write_status_or.status());
+    auto status = WriteFileChunkLocally(header, respond);
+    // write failed
+    if (respond->status() != protos::grpc::WriteFileChunkRespond::OK) {
+        return status;
     }
 
-    respond->set_write_length(write_status_or.value());
+    // write successful
+    // TODO: apply changes to other chunk server
 
     return grpc::Status::OK;
+}
+
+grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
+    const protos::grpc::WriteFileChunkRequestHeader& header,
+    protos::grpc::WriteFileChunkRespond* respond) {
+    auto write_result = file_chunk_manager()->WriteToChunk(
+        header.chunk_handle(), header.version(), header.offset(),
+        header.length(), header.data());
+
+    if (write_result.ok()) {
+        respond->set_write_length(write_result.value());
+        respond->set_status(protos::grpc::WriteFileChunkRespond::OK);
+        return grpc::Status::OK;
+    } else if (google::protobuf::util::IsNotFound(write_result.status())) {
+        // TODO: 版本问题导致无法写入？
+        respond->set_status(protos::grpc::WriteFileChunkRespond::NOT_FOUND);
+        return grpc::Status::OK;
+    } else if (google::protobuf::util::IsOutOfRange(write_result.status())) {
+        respond->set_status(protos::grpc::WriteFileChunkRespond::OUT_OF_RANGE);
+        return grpc::Status::OK;
+    } else {
+        return dfs::common::StatusProtobuf2Grpc(write_result.status());
+    }
 }
 
 }  // namespace server

@@ -5,9 +5,30 @@ package protos.grpc;
 import "chunk_server.proto";
 
 service ChunkServerFileService {
+    // master call
+    rpc InitFileChunk(InitFileChunkRequest) returns(InitFileChunkRespond) {}
+
+    // client or chunkserver call
     rpc ReadFileChunk(ReadFileChunkRequest) returns(ReadFileChunkRespond) {}
 
+    // client call
     rpc WriteFileChunk(WriteFileChunkRequest) returns(WriteFileChunkRespond) {}
+}
+
+message InitFileChunkRequest {
+    string chunk_handle = 1;
+}
+
+message InitFileChunkRespond {
+    InitFileChunkRequest request = 1;
+
+    enum InitFileChunkStatus {
+        UNKNOW = 0;
+        CREATED = 1;
+        ALREADY_EXISTS = 2;
+    };
+
+    InitFileChunkStatus status = 2;
 }
 
 message ReadFileChunkRequest {
@@ -49,6 +70,7 @@ message WriteFileChunkRequestHeader {
 
     bytes data = 5;
 }
+
 message WriteFileChunkRequest {
     WriteFileChunkRequestHeader header = 1;
 
@@ -60,4 +82,14 @@ message WriteFileChunkRespond {
     WriteFileChunkRequest request = 1;
 
     uint32 write_length = 2;
+
+    enum WriteFileChunkStatus {
+        UNKNOW = 0;
+        OK = 1;
+        NOT_FOUND = 2;
+        OUT_OF_RANGE = 3;
+        VERSION_ERROR = 4;
+    };
+
+    WriteFileChunkStatus status = 3;
 }

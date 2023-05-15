@@ -10,6 +10,9 @@
 namespace dfs {
 namespace common {
 
+// 1MB
+const size_t bytesMB = 1024 * 1024;
+
 template <class Key, class Value,
           class Hash = absl::container_internal::hash_default_hash<Key>>
 class parallel_hash_map {

@@ -10,7 +10,8 @@ FileChunkManager* FileChunkManager::GetInstance() {
     return instance;
 }
 
-bool FileChunkManager::Initialize(const std::string& chunk_dbname) {
+bool FileChunkManager::Initialize(const std::string& chunk_dbname,
+                                  const uint32_t& max_bytes_per_chunk) {
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = true;
@@ -20,6 +21,7 @@ bool FileChunkManager::Initialize(const std::string& chunk_dbname) {
     }
 
     chunk_db_ = std::unique_ptr<leveldb::DB>(db);
+    max_bytes_per_chunk_ = max_bytes_per_chunk;
     return true;
 }
 
@@ -88,7 +90,16 @@ google::protobuf::util::StatusOr<uint32_t> FileChunkManager::WriteToChunk(
     }
 
     // TODO: data is too big? stop writing
-    file_chunk->mutable_data()->replace(offset, length, data);
+    // 当前 chunk 可用的字节数
+    uint32_t remaining_bytes = max_bytes_per_chunk_ - offset;
+    if (!remaining_bytes) {
+        return google::protobuf::util::OutOfRangeError(
+            "chunk is full when write chunk: " + chunk_handle);
+    }
+
+    // 实际写入的字节数
+    uint32_t write_length = std::min(remaining_bytes, length);
+    file_chunk->mutable_data()->replace(offset, write_length, data);
 
     auto status = WriteFileChunk(chunk_handle, *file_chunk);
     if (!status.ok()) {
@@ -97,7 +108,7 @@ google::protobuf::util::StatusOr<uint32_t> FileChunkManager::WriteToChunk(
             " status: " + status.ToString());
     }
 
-    return length;
+    return write_length;
 }
 
 google::protobuf::util::StatusOr<uint32_t> FileChunkManager::AppendToChunk(
@@ -110,7 +121,17 @@ google::protobuf::util::StatusOr<uint32_t> FileChunkManager::AppendToChunk(
     }
 
     auto file_chunk = file_chunk_or.value();
-    file_chunk->set_data(file_chunk->data() + data);
+    // 将 offset 设置为 chunk 的末尾
+    uint32_t offset = file_chunk->data().size();
+    uint32_t remaining_bytes = max_bytes_per_chunk_ - offset;
+    if (!remaining_bytes) {
+        return google::protobuf::util::OutOfRangeError(
+            "chunk is full when write chunk: " + chunk_handle);
+    }
+
+    // 实际写入的长度
+    uint32_t append_length = std::min(remaining_bytes, length);
+    file_chunk->set_data(file_chunk->data() + data.substr(append_length));
 
     auto status = WriteFileChunk(chunk_handle, *file_chunk);
     if (!status.ok()) {
@@ -119,7 +140,7 @@ google::protobuf::util::StatusOr<uint32_t> FileChunkManager::AppendToChunk(
             " status: " + status.ToString());
     }
 
-    return length;
+    return append_length;
 }
 
 google::protobuf::util::Status FileChunkManager::DeleteChunk(

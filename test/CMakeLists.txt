@@ -39,6 +39,16 @@ target_link_libraries(metadata_manager_test
     protos_shared
 )
 
+add_executable(chunk_server_manager_test
+    server/master_server/chunk_server_manager_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+)
+
+target_link_libraries(chunk_server_manager_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+)
+
 add_executable(file_chunk_manager_test
     server/chunk_server/file_chunk_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp

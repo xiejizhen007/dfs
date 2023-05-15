@@ -13,3 +13,4 @@ target_link_libraries(common_shared
 add_subdirectory(client)
 add_subdirectory(protos)
 add_subdirectory(server)
+add_subdirectory(grpc_client)

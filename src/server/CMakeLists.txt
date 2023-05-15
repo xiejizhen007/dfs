@@ -13,10 +13,12 @@ target_link_libraries(chunk_server
         protos_shared
         common_shared
         leveldb
+        grpc_client_shared
 )
 
 target_link_libraries(master_server
     PRIVATE
         protos_shared
         common_shared
+        grpc_client_shared
 )

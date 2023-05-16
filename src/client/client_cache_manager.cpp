@@ -21,7 +21,7 @@ google::protobuf::util::Status CacheManager::SetChunkHandle(
 }
 
 google::protobuf::util::StatusOr<std::string> CacheManager::GetChunkHandle(
-    const std::string& filename, const uint32_t& chunk_index) {
+    const std::string& filename, const uint32_t& chunk_index) const {
     if (!chunk_handles_.contains(filename)) {
         return NotFoundError("CacheManager not found filename");
     }
@@ -45,13 +45,33 @@ google::protobuf::util::Status CacheManager::SetChunkVersion(
 }
 
 google::protobuf::util::StatusOr<uint32_t> CacheManager::GetChunkVersion(
-    const std::string& chunk_handle) {
+    const std::string& chunk_handle) const {
     if (!chunk_versions_.contains(chunk_handle)) {
         return NotFoundError("CacheManager chunk hanle not found " +
                              chunk_handle);
     }
 
     return chunk_versions_.at(chunk_handle);
+}
+
+google::protobuf::util::Status CacheManager::SetChunkServerLocationEntry(
+    const std::string& chunk_handle, const ChunkServerLocationEntry& entry) {
+    if (!valid_chunk_handles_.contains(chunk_handle)) {
+        return NotFoundError("chunk handle not found " + chunk_handle);
+    }
+
+    chunk_server_locations_[chunk_handle] = entry;
+    return OkStatus();
+}
+
+google::protobuf::util::StatusOr<CacheManager::ChunkServerLocationEntry>
+CacheManager::GetChunkServerLocationEntry(
+    const std::string& chunk_handle) const {
+    if (!chunk_server_locations_.contains(chunk_handle)) {
+        return NotFoundError("chunk handle not found " + chunk_handle);
+    }
+
+    return chunk_server_locations_.at(chunk_handle);
 }
 
 }  // namespace client

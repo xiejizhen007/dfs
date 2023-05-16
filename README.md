@@ -12,3 +12,4 @@
 - chunk_server_manager_service_impl，具体的 rpc 实现，响应 chunkserver 给 master 发送的数据（chunk metadata）。
 - client_cache_manager，当 client 进行文件操作时，会向 master 请求 metadata，将请求来的 metadata 缓存起来，这样就不需要每次文件操作都向 master 获取 metadata。
 - grpc_client，rpc 服务的客户端。
+- chunk_cache_manager，chunkserver 用于缓存数据，当 client 写入数据时，先将数据写入到 cache，然后根据 cache 数据与写入数据是否相同，来决定写入到 chunkserver。

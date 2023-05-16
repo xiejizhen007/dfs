@@ -10,16 +10,19 @@ namespace server {
 class ChunkServerFileServiceImpl final
     : public protos::grpc::ChunkServerFileService::Service {
    public:
+    // master call
     grpc::Status InitFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::InitFileChunkRequest* request,
         protos::grpc::InitFileChunkRespond* respond) override;
 
+    // client or other chunkserver call
     grpc::Status ReadFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::ReadFileChunkRequest* request,
         protos::grpc::ReadFileChunkRespond* respond) override;
 
+    // client call
     grpc::Status WriteFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::WriteFileChunkRequest* request,

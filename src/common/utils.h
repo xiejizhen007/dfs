@@ -1,17 +1,25 @@
 #ifndef DFS_COMMON_UTILS_H
 #define DFS_COMMON_UTILS_H
 
-#include "absl/container/flat_hash_map.h"
-#include "absl/container/flat_hash_set.h"
-#include "absl/synchronization/mutex.h"
-#include "google/protobuf/stubs/status.h"
-#include "grpc++/grpc++.h"
+#include <absl/container/flat_hash_map.h>
+#include <absl/container/flat_hash_set.h>
+#include <absl/synchronization/mutex.h>
+#include <google/protobuf/stubs/status.h>
+#include <grpc++/grpc++.h>
+#include <openssl/md5.h>
+
+#include <openssl/evp.h>
+
 
 namespace dfs {
 namespace common {
 
 // 1MB
 const size_t bytesMB = 1024 * 1024;
+
+const std::string calc_md5(const std::string& data);
+
+const std::string ComputeHash(const std::string& data);
 
 template <class Key, class Value,
           class Hash = absl::container_internal::hash_default_hash<Key>>

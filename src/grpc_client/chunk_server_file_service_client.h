@@ -16,6 +16,9 @@ class ChunkServerFileServiceClient {
     ChunkServerFileServiceClient(std::shared_ptr<grpc::Channel> channel)
         : stub_(protos::grpc::ChunkServerFileService::NewStub(channel)) {}
 
+    google::protobuf::util::StatusOr<protos::grpc::InitFileChunkRespond>
+    SendRequest(const protos::grpc::InitFileChunkRequest& request);
+
     google::protobuf::util::StatusOr<protos::grpc::ReadFileChunkRespond>
     SendRequest(const protos::grpc::ReadFileChunkRequest& request);
 

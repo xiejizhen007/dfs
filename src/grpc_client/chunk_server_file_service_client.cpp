@@ -6,8 +6,21 @@ namespace dfs {
 namespace grpc_client {
 
 using dfs::common::StatusGrpc2Protobuf;
+using protos::grpc::InitFileChunkRespond;
 using protos::grpc::ReadFileChunkRespond;
 using protos::grpc::WriteFileChunkRespond;
+
+google::protobuf::util::StatusOr<protos::grpc::InitFileChunkRespond>
+ChunkServerFileServiceClient::SendRequest(
+    const protos::grpc::InitFileChunkRequest& request) {
+    grpc::ClientContext context;
+    InitFileChunkRespond respond;
+    auto status = stub_->InitFileChunk(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
+    return StatusGrpc2Protobuf(status);
+}
 
 google::protobuf::util::StatusOr<protos::grpc::ReadFileChunkRespond>
 ChunkServerFileServiceClient::SendRequest(
@@ -15,6 +28,9 @@ ChunkServerFileServiceClient::SendRequest(
     grpc::ClientContext context;
     ReadFileChunkRespond respond;
     auto status = stub_->ReadFileChunk(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
     return StatusGrpc2Protobuf(status);
 }
 
@@ -24,6 +40,9 @@ ChunkServerFileServiceClient::SendRequest(
     grpc::ClientContext context;
     WriteFileChunkRespond respond;
     auto status = stub_->WriteFileChunk(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
     return StatusGrpc2Protobuf(status);
 }
 

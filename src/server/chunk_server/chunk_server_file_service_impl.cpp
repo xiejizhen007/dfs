@@ -109,7 +109,7 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
 
     auto status = WriteFileChunkLocally(header, respond);
     // write failed
-    if (respond->status() != protos::grpc::WriteFileChunkRespond::OK) {
+    if (respond->status() != protos::grpc::FileChunkMutationStatus::OK) {
         return status;
     }
 
@@ -126,16 +126,18 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
         header.chunk_handle(), header.version(), header.offset(),
         header.length(), header.data());
 
+    LOG(INFO) << "write to local status: " + write_result.status().ToString();
+
     if (write_result.ok()) {
         respond->set_write_length(write_result.value());
-        respond->set_status(protos::grpc::WriteFileChunkRespond::OK);
+        respond->set_status(protos::grpc::FileChunkMutationStatus::OK);
         return grpc::Status::OK;
     } else if (google::protobuf::util::IsNotFound(write_result.status())) {
         // TODO: 版本问题导致无法写入？
-        respond->set_status(protos::grpc::WriteFileChunkRespond::NOT_FOUND);
+        respond->set_status(protos::grpc::FileChunkMutationStatus::NOT_FOUND);
         return grpc::Status::OK;
     } else if (google::protobuf::util::IsOutOfRange(write_result.status())) {
-        respond->set_status(protos::grpc::WriteFileChunkRespond::OUT_OF_RANGE);
+        respond->set_status(protos::grpc::FileChunkMutationStatus::OUT_OF_RANGE);
         return grpc::Status::OK;
     } else {
         return dfs::common::StatusProtobuf2Grpc(write_result.status());

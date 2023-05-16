@@ -18,6 +18,16 @@ message("leveldb version: ${leveldb_VERSION}")
 
 include_directories(${PROJECT_SOURCE_DIR}/)
 
+add_executable(utils_test
+    common/utils_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/common/utils.cpp
+)
+
+target_link_libraries(utils_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+)
+
 add_executable(lock_manager_test
     server/master_server/lock_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
@@ -47,6 +57,19 @@ add_executable(chunk_server_manager_test
 target_link_libraries(chunk_server_manager_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
+)
+
+add_executable(chunk_server_file_service_impl_test
+    server/chunk_server/chunk_server_file_service_impl_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_file_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
+)
+
+target_link_libraries(chunk_server_file_service_impl_test
+    ${GTEST_BOTH_LIBRARIES}
+    leveldb
+    protos_shared
+    grpc_client_shared
 )
 
 add_executable(file_chunk_manager_test

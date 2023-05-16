@@ -3,6 +3,24 @@
 namespace dfs {
 namespace common {
 
+const std::string calc_md5(const std::string& data) {
+    std::string md5(MD5_DIGEST_LENGTH, ' ');
+    MD5((const unsigned char*)&data[0], data.size(), (unsigned char*)&md5[0]);
+    return md5;
+}
+
+const std::string ComputeHash(const std::string& data) {
+    std::string hash(EVP_MAX_MD_SIZE, ' ');
+    EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+    EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
+    EVP_DigestUpdate(mdctx, data.data(), data.size());
+    unsigned int len;
+    EVP_DigestFinal_ex(mdctx, reinterpret_cast<unsigned char*>(&hash[0]), &len);
+    hash.resize(len);
+    EVP_MD_CTX_free(mdctx);
+    return hash;
+}
+
 google::protobuf::util::Status StatusGrpc2Protobuf(grpc::Status status) {
     const auto msg = status.error_message();
     switch (status.error_code()) {

@@ -22,5 +22,13 @@ MasterMetadataServiceClient::SendRequest(
     return respond;
 }
 
+google::protobuf::util::Status MasterMetadataServiceClient::SendRequest(
+    const protos::grpc::DeleteFileRequest& request) {
+    grpc::ClientContext context;
+    google::protobuf::Empty respond;
+    auto status = stub_->DeleteFile(&context, request, &respond);
+    return StatusGrpc2Protobuf(status);
+}
+
 }  // namespace grpc_client
 }  // namespace dfs

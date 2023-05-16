@@ -10,3 +10,5 @@
 - chunk_server_file_service_impl，响应客户端对文件的请求。
 - chunk_server_manager 对 chunkserver 的管理，将 chunkserver 的信息保存在 master 的内存中，以便快速读取。
 - chunk_server_manager_service_impl，具体的 rpc 实现，响应 chunkserver 给 master 发送的数据（chunk metadata）。
+- client_cache_manager，当 client 进行文件操作时，会向 master 请求 metadata，将请求来的 metadata 缓存起来，这样就不需要每次文件操作都向 master 获取 metadata。
+- grpc_client，rpc 服务的客户端。

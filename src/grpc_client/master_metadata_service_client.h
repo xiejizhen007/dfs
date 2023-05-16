@@ -18,6 +18,9 @@ class MasterMetadataServiceClient {
     google::protobuf::util::StatusOr<protos::grpc::OpenFileRespond> SendRequest(
         const protos::grpc::OpenFileRequest& request);
 
+    google::protobuf::util::Status SendRequest(
+        const protos::grpc::DeleteFileRequest& request);
+
    private:
     std::unique_ptr<protos::grpc::MasterMetadataService::Stub> stub_;
 };

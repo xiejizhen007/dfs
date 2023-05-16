@@ -1,12 +1,14 @@
 #ifndef DFS_CLIENT_DFS_CLIENT_IMPL_H
 #define DFS_CLIENT_DFS_CLIENT_IMPL_H
 
-#include "master_metadata_service.grpc.pb.h"
-#include "src/grpc_client/master_metadata_service_client.h"
-
 #include <google/protobuf/stubs/statusor.h>
 
 #include <string>
+
+#include "master_metadata_service.grpc.pb.h"
+#include "src/client/client_cache_manager.h"
+#include "src/grpc_client/chunk_server_file_service_client.h"
+#include "src/grpc_client/master_metadata_service_client.h"
 
 namespace dfs {
 namespace client {
@@ -20,8 +22,30 @@ class DfsClientImpl {
 
     google::protobuf::util::Status DeleteFile(const std::string& filename);
 
+    google::protobuf::util::StatusOr<std::pair<size_t, std::string>> ReadFile(
+        const std::string& filename, size_t offset, size_t nbytes);
+
+    google::protobuf::util::StatusOr<size_t> WriteFile(
+        const std::string& filename, const std::string& data, size_t offset,
+        size_t nbytes);
+
    private:
-    std::shared_ptr<dfs::grpc_client::MasterMetadataServiceClient> master_metadata_service_client_;
+    // cache metadata to cache manager
+    void CacheToCacheManager(const std::string& filename,
+                             const uint32_t& chunk_index,
+                             const protos::grpc::OpenFileRespond& respond);
+
+    google::protobuf::util::StatusOr<protos::grpc::ReadFileChunkRespond>
+    ReadFileChunk(const std::string& filename, size_t chunk_index,
+                  size_t offset, size_t nbytes);
+
+    std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+        chunk_server_file_service_client_;
+
+    std::shared_ptr<dfs::grpc_client::MasterMetadataServiceClient>
+        master_metadata_service_client_;
+
+    std::shared_ptr<CacheManager> cache_manager_;
 };
 
 }  // namespace client

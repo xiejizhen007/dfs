@@ -20,6 +20,8 @@ DfsClientImpl::DfsClientImpl() {
         grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials());
     master_metadata_service_client_ =
         std::make_shared<MasterMetadataServiceClient>(channel);
+
+    cache_manager_ = std::make_shared<CacheManager>();
 }
 
 google::protobuf::util::Status DfsClientImpl::CreateFile(

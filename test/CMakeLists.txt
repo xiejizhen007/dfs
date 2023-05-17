@@ -28,6 +28,17 @@ target_link_libraries(utils_test
     protos_shared
 )
 
+add_executable(client_cache_manager_test
+    client/client_cache_manager_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/client_cache_manager.cpp
+)
+
+target_link_libraries(client_cache_manager_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+    glog
+)
+
 add_executable(lock_manager_test
     server/master_server/lock_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
@@ -57,6 +68,18 @@ add_executable(chunk_server_manager_test
 target_link_libraries(chunk_server_manager_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
+)
+
+add_executable(chunk_server_manager_service_impl_test
+    server/master_server/chunk_server_manager_service_impl_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+)
+
+target_link_libraries(chunk_server_manager_service_impl_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+    grpc_client_shared
 )
 
 add_executable(chunk_server_file_service_impl_test

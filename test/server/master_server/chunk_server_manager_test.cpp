@@ -34,10 +34,11 @@ TEST_F(ChunkServerManagerTest, BasicFunctionTest) {
     EXPECT_EQ(server->stored_chunk_handles_size(), 2);
     EXPECT_EQ(server->location(), location);
 
-    chunk_server_manager_->RegisterChunkServer(server);
+    EXPECT_TRUE(chunk_server_manager_->RegisterChunkServer(server));
+    EXPECT_FALSE(chunk_server_manager_->RegisterChunkServer(server));
 
     auto xx = chunk_server_manager_->GetChunkLocation("0");
-    EXPECT_TRUE(xx.Contains(location));
+    EXPECT_TRUE(xx.contains(location));
 
     auto new_server = chunk_server_manager_->GetChunkServer(location);
     if (!new_server) {
@@ -49,32 +50,12 @@ TEST_F(ChunkServerManagerTest, BasicFunctionTest) {
 
     chunk_server_manager_->UnRegisterChunkServer(location);
     auto xxx = chunk_server_manager_->GetChunkLocation("0");
-    EXPECT_FALSE(xxx.Contains(location));
+    EXPECT_FALSE(xxx.contains(location));
 
-    // std::unordered_map<std::string, int> map;
-    // std::atomic<int> insert_count = 0;
+    ChunkServer s1;
+    ChunkServer s2;
 
-    // std::vector<std::thread> threads;
-
-    // int num = 100;
-
-    // for (int i = 0; i < num; i++) {
-    //     threads.push_back(std::thread([&, i](){
-    //         map.insert({std::to_string(i), i});
-    //         insert_count.fetch_add(i);
-    //     }));
-    // }
-
-    // for (auto& thread: threads) {
-    //     thread.join();
-    // }
-
-    // threads.clear();
-
-    // int count = 0;
-    // for (const auto& obj: map) {
-    //     count += obj.second;
-    // }
-
-    // EXPECT_EQ(count, insert_count.load());
+    s1.set_available_disk_mb(10);
+    s2.set_available_disk_mb(20);
+    EXPECT_TRUE(s1 < s2);
 }

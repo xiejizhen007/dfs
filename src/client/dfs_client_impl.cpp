@@ -15,7 +15,7 @@ using protos::grpc::WriteFileChunkRequest;
 
 DfsClientImpl::DfsClientImpl() {
     // TODO: read ip:port from config file.
-    const std::string& target_str = "127.0.0.1:1234";
+    const std::string& target_str = "127.0.0.1:50050";
     auto channel =
         grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials());
     master_metadata_service_client_ =
@@ -141,8 +141,9 @@ google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
          chunk_index++) {
         size_t bytes_to_write = std::min(remain_bytes, chunk_size);
 
-        auto respond_or = WriteFileChunk(filename, data.substr(bytes_write), chunk_index,
-                                         chunk_start_offset, bytes_to_write);
+        auto respond_or =
+            WriteFileChunk(filename, data.substr(bytes_write), chunk_index,
+                           chunk_start_offset, bytes_to_write);
         if (!respond_or.ok()) {
             return respond_or.status();
         }
@@ -195,6 +196,16 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     }
 
     return respond_or.value();
+}
+
+std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+DfsClientImpl::GetChunkServerFileServiceClient(const std::string& address) {
+    auto value_pair = chunk_server_file_service_clients_.TryGet(address);
+    if (!value_pair.second) {
+        return nullptr;
+    }
+
+    return value_pair.first;
 }
 
 void DfsClientImpl::CacheToCacheManager(

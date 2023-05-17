@@ -17,4 +17,6 @@ message ReportChunkServerRequest {
 
 message ReportChunkServerRespond {
     ReportChunkServerRequest request = 1;
+
+    repeated string delete_chunk_handles = 2;
 }

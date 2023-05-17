@@ -6,7 +6,15 @@
 namespace dfs {
 namespace server {
 
+using dfs::common::StatusProtobuf2Grpc;
+using dfs::grpc_client::ChunkServerFileServiceClient;
+using protos::grpc::InitFileChunkRequest;
+
 MasterMetadataServiceImpl::MasterMetadataServiceImpl() {}
+
+ChunkServerManager* MasterMetadataServiceImpl::chunk_server_manager() {
+    return ChunkServerManager::GetInstance();
+}
 
 MetadataManager* MasterMetadataServiceImpl::metadata_manager() {
     return MetadataManager::GetInstance();
@@ -82,7 +90,18 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkRead(
     protos::FileChunkMetadata respondMetadata = file_chunk_metadata_or.value();
     respond->mutable_metadata()->set_chunk_handle(chunk_handle);
     respond->mutable_metadata()->set_version(respondMetadata.version());
+
     // TODO set up chunk server
+    for (const auto& location :
+         chunk_server_manager()->GetChunkLocation(chunk_handle)) {
+        *respond->mutable_metadata()->add_locations() = location;
+    }
+
+    if (respond->metadata().locations().empty()) {
+        LOG(ERROR) << "no chunk server to chunk handle: " << chunk_handle;
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            "no chunk server is available");
+    }
 
     return grpc::Status::OK;
 }
@@ -125,6 +144,14 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     auto new_chunk_version = chunk_version + 1;
 
     // TODO: set up chunk server
+    for (const auto& location :
+         chunk_server_manager()->GetChunkLocation(chunk_handle)) {
+        const std::string server_address =
+            location.server_hostname() + ":" +
+            std::to_string(location.server_port());
+
+        // auto client = GetChunkServerFileServiceClient(server_address);
+    }
 
     return grpc::Status::OK;
 }
@@ -141,6 +168,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
                             "file metadata is not found");
     }
 
+    // create file chunk
     auto chunk_handle_or =
         metadata_manager()->CreateChunkHandle(filename, chunk_index);
     if (!chunk_handle_or.ok()) {
@@ -152,12 +180,48 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
                   << " for file " << filename;
     }
 
+    // get chunk_handle
     const auto& chunk_handle = chunk_handle_or.value();
+
+    // TODO: assign chunk servers to store this chunk
+    auto chunk_server_locations =
+        chunk_server_manager()->AssignChunkServer(chunk_handle, 1);
+    LOG(INFO) << "assign " << chunk_server_locations.size() << " chunk server";
     protos::FileChunkMetadata chunk_metadata;
     chunk_metadata.set_chunk_handle(chunk_handle);
-    // 新的 chunk 版本都为 1，当 chunk 变化时进行累加
     chunk_metadata.set_version(1);
     metadata_manager()->SetFileChunkMetadata(chunk_metadata);
+
+    respond->mutable_metadata()->set_chunk_handle(chunk_handle);
+    respond->mutable_metadata()->set_version(1);
+
+    // TODO: talk to chunk server
+    for (const auto& location :
+         chunk_server_manager()->GetChunkLocation(chunk_handle)) {
+        const std::string server_address =
+            location.server_hostname() + ":" +
+            std::to_string(location.server_port());
+
+        auto client = GetChunkServerFileServiceClient(server_address);
+        // set up request, and send request
+        InitFileChunkRequest request;
+        request.set_chunk_handle(chunk_handle);
+        auto init_chunk_or = client->SendRequest(request);
+
+        if (!init_chunk_or.ok()) {
+            LOG(ERROR) << "failed init request";
+            return StatusProtobuf2Grpc(init_chunk_or.status());
+        }
+
+        // ok
+        *respond->mutable_metadata()->add_locations() = location;
+    }
+
+    if (respond->metadata().locations().empty()) {
+        LOG(ERROR) << "no chunk server to chunk handle: " << chunk_handle;
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            "no chunk server is available");
+    }
 
     return grpc::Status::OK;
 }
@@ -187,6 +251,21 @@ grpc::Status MasterMetadataServiceImpl::DeleteFile(
     LOG(INFO) << "Delete file: " << filename;
     metadata_manager()->DeleteFileAndChunkMetadata(filename);
     return grpc::Status::OK;
+}
+
+std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+MasterMetadataServiceImpl::GetChunkServerFileServiceClient(
+    const std::string& server_address) {
+    absl::WriterMutexLock chunk_server_file_service_clients_lock_guard(
+        &chunk_server_file_service_clients_lock_);
+    if (!chunk_server_file_service_clients_.contains(server_address)) {
+        // create client
+        chunk_server_file_service_clients_[server_address] =
+            std::make_shared<ChunkServerFileServiceClient>(grpc::CreateChannel(
+                server_address, grpc::InsecureChannelCredentials()));
+    }
+
+    return chunk_server_file_service_clients_[server_address];
 }
 
 }  // namespace server

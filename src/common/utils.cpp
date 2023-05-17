@@ -30,9 +30,11 @@ google::protobuf::util::Status StatusGrpc2Protobuf(grpc::Status status) {
             return google::protobuf::util::NotFoundError(msg);
         case grpc::StatusCode::ALREADY_EXISTS:
             return google::protobuf::util::AlreadyExistsError(msg);
+        case grpc::StatusCode::UNKNOWN:
+            return google::protobuf::util::UnknownError(msg);
     }
 
-    return google::protobuf::util::InternalError("Unknown error message code");
+    return google::protobuf::util::InternalError("Unknown error message code" + msg);
 }
 
 grpc::Status StatusProtobuf2Grpc(google::protobuf::util::Status status) {

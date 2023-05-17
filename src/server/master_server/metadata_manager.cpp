@@ -24,6 +24,10 @@ bool MetadataManager::ExistFileMetadata(const std::string& filename) {
     return file_metadatas_.Contains(filename);
 }
 
+bool MetadataManager::ExistFileChunkMetadata(const std::string& chunk_handle) {
+    return chunk_metadatas_.Contains(chunk_handle);
+}
+
 google::protobuf::util::Status MetadataManager::CreateFileMetadata(
     const std::string& filename) {
     // step 1: Lock the parent directory first(readerlock)

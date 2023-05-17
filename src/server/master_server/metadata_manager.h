@@ -20,6 +20,8 @@ class MetadataManager {
 
     bool ExistFileMetadata(const std::string& filename);
 
+    bool ExistFileChunkMetadata(const std::string& chunk_handle);
+
     google::protobuf::util::Status CreateFileMetadata(
         const std::string& filename);
 

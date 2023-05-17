@@ -1,19 +1,30 @@
 #include "src/common/system_logger.h"
-#include "src/grpc_client/chunk_server_control_service_client.h"
+#include "src/server/master_server/chunk_server_manager_service_impl.h"
+#include "src/server/master_server/master_metadata_service_impl.h"
+
+using namespace dfs::server;
 
 int main(int argc, char* argv[]) {
     dfs::common::SystemLogger::GetInstance().Initialize(argv[0]);
-    LOG(INFO) << "hello";
+    LOG(INFO) << "start master server";
 
-    std::string target_str = "localhost:50051";
-    dfs::grpc_client::ChunkServerControlServiceClient stub(
-        grpc::CreateChannel(target_str, grpc::InsecureChannelCredentials()));
+    grpc::ServerBuilder builder;
+    std::string server_address("0.0.0.0:50050");
+    builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
-    protos::grpc::SendHeartBeatRequest request;
-    auto status = stub.SendHeartBeat(request);
-    if (status.ok()) {
-        LOG(INFO) << "chunk server is still alive";
-    }
+    //set up service
+    ChunkServerManagerServiceImpl chunk_server_manager_service;
+    builder.RegisterService(&chunk_server_manager_service);
+
+    MasterMetadataServiceImpl metadata_service;
+    builder.RegisterService(&metadata_service);
+
+    // build server
+    std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
+
+    LOG(INFO) << "master server listening on " << server_address;
+
+    server->Wait();
 
     google::ShutdownGoogleLogging();
     return 0;

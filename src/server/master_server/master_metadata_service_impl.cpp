@@ -233,9 +233,9 @@ grpc::Status MasterMetadataServiceImpl::OpenFile(
         case protos::grpc::OpenFileRequest::CREATE:
             return HandleFileCreation(request, respond);
         case protos::grpc::OpenFileRequest::READ:
-
+            return HandleFileChunkRead(request, respond);
         case protos::grpc::OpenFileRequest::WRITE:
-
+            return HandleFileChunkWrite(request, respond);
         default:
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                 "OpenFile got invaild mode");

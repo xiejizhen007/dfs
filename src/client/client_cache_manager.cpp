@@ -64,7 +64,7 @@ google::protobuf::util::StatusOr<uint32_t> CacheManager::GetChunkVersion(
 google::protobuf::util::Status CacheManager::SetChunkServerLocationEntry(
     const std::string& chunk_handle, const ChunkServerLocationEntry& entry) {
     if (!valid_chunk_handles_.contains(chunk_handle)) {
-        return NotFoundError("chunk handle not found " + chunk_handle);
+        return NotFoundError("SetChunkServerLocationEnrty: chunk handle not found " + chunk_handle);
     }
 
     chunk_server_locations_[chunk_handle] = entry;
@@ -75,7 +75,7 @@ google::protobuf::util::StatusOr<CacheManager::ChunkServerLocationEntry>
 CacheManager::GetChunkServerLocationEntry(
     const std::string& chunk_handle) const {
     if (!chunk_server_locations_.contains(chunk_handle)) {
-        return NotFoundError("chunk handle not found " + chunk_handle);
+        return NotFoundError("GetChunkServerLocationEntry: chunk handle not found " + chunk_handle);
     }
 
     return chunk_server_locations_.at(chunk_handle);

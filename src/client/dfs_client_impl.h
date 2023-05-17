@@ -53,6 +53,8 @@ class DfsClientImpl {
     std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
     GetChunkServerFileServiceClient(const std::string& address);
 
+    bool RegisterChunkServerFileServiceClient(const std::string& address);
+
     dfs::common::parallel_hash_map<
         std::string,
         std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>>

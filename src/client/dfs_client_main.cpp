@@ -28,7 +28,12 @@ int main(int argc, char* argv[]) {
             LOG(INFO) << "open status: " << status.ToString();
         } else if (token[0] == "read" && token.size() == 4) {
             auto status = read(token[1], std::stoi(token[2]), std::stoi(token[3]));
-            LOG(INFO) << "read status: " << status.status().ToString();
+            if (status.ok()) {
+                auto data = status.value();
+                LOG(INFO) << "read nbytes: " << data.bytes << " buffer: " << data.buffer;
+            } else {
+                LOG(INFO) << "read status: " << status.status().ToString();
+            }
         } else if (token[0] == "write" && token.size() == 5) {
             auto status = write(token[1], token[2], std::stoi(token[3]), std::stoi(token[4]));
             LOG(INFO) << "write status: " << status.status().ToString();

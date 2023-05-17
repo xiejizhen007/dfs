@@ -1,10 +1,12 @@
 #include "src/client/dfs_client_impl.h"
 
+#include "src/common/system_logger.h"
 #include "src/common/utils.h"
 
 namespace dfs {
 namespace client {
 
+using dfs::grpc_client::ChunkServerFileServiceClient;
 using dfs::grpc_client::MasterMetadataServiceClient;
 using google::protobuf::util::OkStatus;
 using google::protobuf::util::UnknownError;
@@ -113,21 +115,42 @@ DfsClientImpl::ReadFileChunk(const std::string& filename, size_t chunk_index,
     request.set_offset(offset);
     request.set_length(nbytes);
 
-    auto location = entry.primary_location;
-    std::string server_address = location.server_hostname() + ":" +
-                                 std::to_string(location.server_port());
+    // auto location = entry.primary_location;
+    // std::string server_address = location.server_hostname() + ":" +
+    //                              std::to_string(location.server_port());
 
-    // talk to chunkserver
-    auto chunk_server_file_service_client =
-        GetChunkServerFileServiceClient(server_address);
+    // LOG(INFO) << "try to talk to chunkserver " << server_address;
 
-    auto respond_or = chunk_server_file_service_client->SendRequest(request);
-    if (!respond_or.ok()) {
-        return respond_or.status();
+    // // talk to chunkserver
+    // auto chunk_server_file_service_client =
+    //     GetChunkServerFileServiceClient(server_address);
+
+    // auto respond_or = chunk_server_file_service_client->SendRequest(request);
+    // if (!respond_or.ok()) {
+    //     return respond_or.status();
+    // }
+
+    // return respond_or.value();
+    // TODO: 轮询每个 chunkserver，只要有一个成功返回，立马退出
+    for (const auto& location : entry.locations) {
+        const std::string server_address =
+            location.server_hostname() + ":" +
+            std::to_string(location.server_port());
+
+        LOG(INFO) << "try to talk to chunkserver " << server_address;
+
+        auto chunk_server_file_service_client =
+            GetChunkServerFileServiceClient(server_address);
+
+        auto respond_or =
+            chunk_server_file_service_client->SendRequest(request);
+        if (respond_or.ok()) {
+            return respond_or.value();
+        }
     }
 
-    return respond_or.value();
-    // TODO: 轮询每个 chunkserver，只要有一个成功返回，立马退出
+    return google::protobuf::util::UnknownError(
+        "cant not read from entry.location");
 }
 
 google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
@@ -176,7 +199,8 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     }
 
     // get chunk server location, handle data write
-    auto location = entry.primary_location;
+    // TODO: retry when write failed
+    auto location = entry.locations.at(0);
     std::string server_address = location.server_hostname() + ":" +
                                  std::to_string(location.server_port());
 
@@ -194,6 +218,7 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
 
     auto respond_or = chunk_server_file_service_client->SendRequest(request);
     if (!respond_or.ok()) {
+        LOG(ERROR) << "write file chunk respond is not ok";
         return respond_or.status();
     }
 
@@ -204,10 +229,20 @@ std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
 DfsClientImpl::GetChunkServerFileServiceClient(const std::string& address) {
     auto value_pair = chunk_server_file_service_clients_.TryGet(address);
     if (!value_pair.second) {
-        return nullptr;
+        RegisterChunkServerFileServiceClient(address);
+        value_pair = chunk_server_file_service_clients_.TryGet(address);
     }
 
     return value_pair.first;
+}
+
+bool DfsClientImpl::RegisterChunkServerFileServiceClient(
+    const std::string& address) {
+    std::shared_ptr<ChunkServerFileServiceClient> file_service_client =
+        std::make_shared<ChunkServerFileServiceClient>(
+            grpc::CreateChannel(address, grpc::InsecureChannelCredentials()));
+    return chunk_server_file_service_clients_.TryInsert(address,
+                                                        file_service_client);
 }
 
 void DfsClientImpl::CacheToCacheManager(
@@ -230,6 +265,13 @@ void DfsClientImpl::CacheToCacheManager(
     } else {
         // add log
     }
+
+    CacheManager::ChunkServerLocationEntry entry;
+    entry.primary_location = respond.metadata().primary_location();
+    for (const auto& location : respond.metadata().locations()) {
+        entry.locations.emplace_back(location);
+    }
+    cache_manager_->SetChunkServerLocationEntry(chunk_handle, entry);
 }
 
 google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
@@ -238,17 +280,19 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
     size_t& chunk_version, CacheManager::ChunkServerLocationEntry& entry) {
     bool metedata_in_cache = true;
     // get chunk_handle, chunk_version, entry from cache.
+    LOG(INFO) << "start to get chunk metadata";
     auto cache_chunk_handle_or =
         cache_manager_->GetChunkHandle(filename, chunk_index);
     if (cache_chunk_handle_or.ok()) {
         chunk_handle = cache_chunk_handle_or.value();
-        auto cache_chunk_version =
+        auto cache_chunk_version_or =
             cache_manager_->GetChunkVersion(chunk_handle);
-        if (cache_chunk_version.ok()) {
-            chunk_version = cache_chunk_version.value();
+        if (cache_chunk_version_or.ok()) {
+            chunk_version = cache_chunk_version_or.value();
             auto cache_chunk_server_location_or =
                 cache_manager_->GetChunkServerLocationEntry(chunk_handle);
             if (cache_chunk_server_location_or.ok()) {
+                LOG(INFO) << "all data in cache";
                 entry = cache_chunk_server_location_or.value();
             } else {
                 metedata_in_cache = false;
@@ -261,6 +305,7 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
     }
 
     if (!metedata_in_cache) {
+        LOG(INFO) << "talk to master metadata service";
         // talk to master_metadata_service
         OpenFileRequest request;
         request.set_filename(filename);

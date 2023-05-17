@@ -68,17 +68,21 @@ add_executable(chunk_server_manager_test
 target_link_libraries(chunk_server_manager_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
+    common_shared
 )
 
 add_executable(chunk_server_manager_service_impl_test
     server/master_server/chunk_server_manager_service_impl_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager_service_impl.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
 )
 
 target_link_libraries(chunk_server_manager_service_impl_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
+    common_shared
     grpc_client_shared
 )
 

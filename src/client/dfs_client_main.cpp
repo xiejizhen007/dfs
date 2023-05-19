@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
             auto status = read(token[1], std::stoi(token[2]), std::stoi(token[3]));
             if (status.ok()) {
                 auto data = status.value();
-                LOG(INFO) << "read nbytes: " << data.bytes << " buffer: " << data.buffer;
+                LOG(INFO) << "read nbytes: " << data.bytes << ", buffer: " << data.buffer;
             } else {
                 LOG(INFO) << "read status: " << status.status().ToString();
             }

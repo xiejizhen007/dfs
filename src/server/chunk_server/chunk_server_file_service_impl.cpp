@@ -2,9 +2,13 @@
 
 #include "src/common/system_logger.h"
 #include "src/common/utils.h"
+#include "src/server/chunk_server/chunk_cache_manager.h"
 
 namespace dfs {
 namespace server {
+
+using protos::grpc::FileChunkMutationStatus;
+using protos::grpc::SendChunkDataRespond;
 
 FileChunkManager* ChunkServerFileServiceImpl::file_chunk_manager() {
     return FileChunkManager::GetInstance();
@@ -92,6 +96,8 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     }
 
     const auto& read_data = read_status_or.value();
+    LOG(INFO) << "read_data: " << read_data << "  "
+              << "length: " << read_data.size();
 
     respond->set_data(read_data);
     respond->set_read_length(read_data.size());
@@ -119,12 +125,52 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
     return grpc::Status::OK;
 }
 
+grpc::Status ChunkServerFileServiceImpl::SendChunkData(
+    grpc::ServerContext* context,
+    const protos::grpc::SendChunkDataRequest* request,
+    protos::grpc::SendChunkDataRespond* respond) {
+    *respond->mutable_request() = *request;
+    // data too big
+    if (request->data().size() > 4 * dfs::common::bytesMB) {
+        LOG(ERROR) << "send chunk data is too big";
+        respond->set_status(SendChunkDataRespond::DATA_TOO_BIG);
+        return grpc::Status::OK;
+    }
+
+    // 对比校验和
+    auto checksum = dfs::common::ComputeHash(request->data());
+    if (checksum != request->checksum()) {
+        LOG(ERROR) << "send chunk data checksum failed";
+        respond->set_status(SendChunkDataRespond::BAD_DATA);
+        return grpc::Status::OK;
+    }
+
+    // cache
+    ChunkCacheManager::GetInstance()->Set(request->checksum(), request->data());
+    LOG(INFO) << "send chunk data, data is cached";
+    respond->set_status(SendChunkDataRespond::OK);
+
+    return grpc::Status::OK;
+}
+
 grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
     const protos::grpc::WriteFileChunkRequestHeader& header,
     protos::grpc::WriteFileChunkRespond* respond) {
+    LOG(INFO) << "check data checksum: " << header.checksum()
+              << " chunk handle: " << header.chunk_handle();
+    // get data from cache
+    auto data_or = ChunkCacheManager::GetInstance()->Get(header.checksum());
+    if (!data_or.ok()) {
+        LOG(ERROR) << "data not found in cache for checksum: "
+                   << header.checksum();
+        respond->set_status(FileChunkMutationStatus::NOT_FOUND);
+        return grpc::Status::OK;
+    }
+
+    // 将 cache 里读到的数据写入
     auto write_result = file_chunk_manager()->WriteToChunk(
         header.chunk_handle(), header.version(), header.offset(),
-        header.length(), header.data());
+        header.length(), data_or.value());
 
     LOG(INFO) << "write to local status: " + write_result.status().ToString();
 
@@ -137,7 +183,8 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
         respond->set_status(protos::grpc::FileChunkMutationStatus::NOT_FOUND);
         return grpc::Status::OK;
     } else if (google::protobuf::util::IsOutOfRange(write_result.status())) {
-        respond->set_status(protos::grpc::FileChunkMutationStatus::OUT_OF_RANGE);
+        respond->set_status(
+            protos::grpc::FileChunkMutationStatus::OUT_OF_RANGE);
         return grpc::Status::OK;
     } else {
         return dfs::common::StatusProtobuf2Grpc(write_result.status());

@@ -14,6 +14,8 @@ service ChunkServerFileService {
     // client call
     rpc WriteFileChunk(WriteFileChunkRequest) returns(WriteFileChunkRespond) {}
 
+    rpc SendChunkData(SendChunkDataRequest) returns(SendChunkDataRespond) {}
+
     // primary chunkserver call
     // rpc ApplyMutation()
 }
@@ -80,6 +82,8 @@ message WriteFileChunkRequestHeader {
     uint32 length = 4;
 
     bytes data = 5;
+
+    bytes checksum = 6;
 }
 
 message WriteFileChunkRequest {
@@ -95,6 +99,25 @@ message WriteFileChunkRespond {
     uint32 write_length = 2;
 
     FileChunkMutationStatus status = 3;
+}
+
+message SendChunkDataRequest {
+    bytes checksum = 1;
+
+    bytes data = 2;
+}
+
+message SendChunkDataRespond {
+    SendChunkDataRequest request = 1;
+
+    enum SendChunkDataStatus {
+        UNKNOW = 0;
+        OK = 1;
+        DATA_TOO_BIG = 2;
+        BAD_DATA = 3;
+    };
+
+    SendChunkDataStatus status = 2;
 }
 
 message ApplyMutationRequest {

@@ -13,6 +13,7 @@ using google::protobuf::util::UnknownError;
 using protos::grpc::DeleteFileRequest;
 using protos::grpc::OpenFileRequest;
 using protos::grpc::ReadFileChunkRequest;
+using protos::grpc::SendChunkDataRequest;
 using protos::grpc::WriteFileChunkRequest;
 
 DfsClientImpl::DfsClientImpl() {
@@ -90,7 +91,7 @@ DfsClientImpl::ReadFile(const std::string& filename, size_t offset,
         remain_bytes -= actually_read_bytes;
     }
 
-    auto res = std::string((char*)buffer);
+    auto res = std::string((char*)buffer, nbytes);
     free(buffer);
     return std::make_pair(bytes_read, res);
 }
@@ -204,17 +205,36 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     std::string server_address = location.server_hostname() + ":" +
                                  std::to_string(location.server_port());
 
+    auto data_to_send = data.substr(0, nbytes);
+    // calc checksum
+    auto checksum = dfs::common::ComputeHash(data_to_send);
+
+    // talk to chunkserver
+    auto chunk_server_file_service_client =
+        GetChunkServerFileServiceClient(server_address);
+
+    // send chunk data first
+    SendChunkDataRequest send_request;
+    send_request.set_checksum(checksum);
+    send_request.set_data(data_to_send);
+    auto send_respond_or =
+        chunk_server_file_service_client->SendRequest(send_request);
+    if (!send_respond_or.ok()) {
+        LOG(ERROR) << "send chunk data is failed, because "
+                   << send_respond_or.status().ToString();
+        return send_respond_or.status();
+    }
+
+    // write data to chunk
     WriteFileChunkRequest request;
     request.mutable_header()->set_chunk_handle(chunk_handle);
     request.mutable_header()->set_version(chunk_version);
     request.mutable_header()->set_offset(offset);
     request.mutable_header()->set_length(nbytes);
-    request.mutable_header()->set_data(data);
-    request.mutable_locations()->Add(std::move(location));
+    // request.mutable_header()->set_data(data);
+    request.mutable_header()->set_checksum(checksum);
 
-    // talk to chunkserver
-    auto chunk_server_file_service_client =
-        GetChunkServerFileServiceClient(server_address);
+    request.mutable_locations()->Add(std::move(location));
 
     auto respond_or = chunk_server_file_service_client->SendRequest(request);
     if (!respond_or.ok()) {
@@ -280,7 +300,6 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
     size_t& chunk_version, CacheManager::ChunkServerLocationEntry& entry) {
     bool metedata_in_cache = true;
     // get chunk_handle, chunk_version, entry from cache.
-    LOG(INFO) << "start to get chunk metadata";
     auto cache_chunk_handle_or =
         cache_manager_->GetChunkHandle(filename, chunk_index);
     if (cache_chunk_handle_or.ok()) {
@@ -292,7 +311,7 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
             auto cache_chunk_server_location_or =
                 cache_manager_->GetChunkServerLocationEntry(chunk_handle);
             if (cache_chunk_server_location_or.ok()) {
-                LOG(INFO) << "all data in cache";
+                LOG(INFO) << "file metadata in cache";
                 entry = cache_chunk_server_location_or.value();
             } else {
                 metedata_in_cache = false;

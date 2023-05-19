@@ -8,6 +8,7 @@ namespace grpc_client {
 using dfs::common::StatusGrpc2Protobuf;
 using protos::grpc::InitFileChunkRespond;
 using protos::grpc::ReadFileChunkRespond;
+using protos::grpc::SendChunkDataRespond;
 using protos::grpc::WriteFileChunkRespond;
 
 google::protobuf::util::StatusOr<protos::grpc::InitFileChunkRespond>
@@ -40,6 +41,18 @@ ChunkServerFileServiceClient::SendRequest(
     grpc::ClientContext context;
     WriteFileChunkRespond respond;
     auto status = stub_->WriteFileChunk(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
+    return StatusGrpc2Protobuf(status);
+}
+
+google::protobuf::util::StatusOr<protos::grpc::SendChunkDataRespond>
+ChunkServerFileServiceClient::SendRequest(
+    const protos::grpc::SendChunkDataRequest& request) {
+    grpc::ClientContext context;
+    SendChunkDataRespond respond;
+    auto status = stub_->SendChunkData(&context, request, &respond);
     if (status.ok()) {
         return respond;
     }

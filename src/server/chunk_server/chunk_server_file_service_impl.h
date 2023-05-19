@@ -28,6 +28,12 @@ class ChunkServerFileServiceImpl final
         const protos::grpc::WriteFileChunkRequest* request,
         protos::grpc::WriteFileChunkRespond* respond) override;
 
+    // client call
+    grpc::Status SendChunkData(
+        grpc::ServerContext* context,
+        const protos::grpc::SendChunkDataRequest* request,
+        protos::grpc::SendChunkDataRespond* respond) override;
+
    private:
     FileChunkManager* file_chunk_manager();
 

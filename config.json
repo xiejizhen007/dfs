@@ -1,0 +1,34 @@
+{
+    "master_server": [
+        {
+            "name": "master_server0",
+            "address": "127.0.0.1",
+            "port": 50050
+        }
+    ],
+    "chunk_server": [
+        {
+            "name": "chunk_server0",
+            "address": "127.0.0.1",
+            "port": 50100
+        },
+        {
+            "name": "chunk_server1",
+            "address": "127.0.0.1",
+            "port": 50101
+        },
+        {
+            "name": "chunk_server2",
+            "address": "127.0.0.1",
+            "port": 50102
+        }
+    ],
+    "timeout": {
+        "grpc": 10,
+        "heartbeat": 30,
+        "client_cache": 600
+    },
+    "disk": {
+        "block_size": 64
+    }
+}

@@ -18,6 +18,17 @@ message("leveldb version: ${leveldb_VERSION}")
 
 include_directories(${PROJECT_SOURCE_DIR}/)
 
+add_executable(config_manager_test
+    common/config_manager_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/common/config_manager.cpp
+)
+
+target_link_libraries(config_manager_test
+    ${GTEST_BOTH_LIBRARIES}
+    protos_shared
+    jsoncpp
+)
+
 add_executable(utils_test
     common/utils_test.cpp
     ${PROJECT_SOURCE_DIR}/src/common/utils.cpp
@@ -88,6 +99,7 @@ target_link_libraries(chunk_server_manager_service_impl_test
 
 add_executable(chunk_server_file_service_impl_test
     server/chunk_server/chunk_server_file_service_impl_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_cache_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_file_service_impl.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
 )

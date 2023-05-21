@@ -8,6 +8,7 @@ message(STATUS "glog version: ${glog_VERSION}")
 
 target_link_libraries(common_shared
     glog
+    jsoncpp
 )
 
 add_subdirectory(client)

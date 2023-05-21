@@ -19,8 +19,10 @@ namespace server {
 
 class FileChunkManager {
    public:
+    // 获取单例对象
     static FileChunkManager* GetInstance();
 
+    // 初始化数据库，数据块大小
     bool Initialize(const std::string& chunk_dbname,
                     const uint32_t& max_bytes_per_chunk);
 
@@ -29,6 +31,7 @@ class FileChunkManager {
     google::protobuf::util::Status CreateChunk(const std::string& chunk_handle,
                                                const uint32_t& chunk_version);
 
+    // 读取数据块
     google::protobuf::util::StatusOr<std::string> ReadFromChunk(
         const std::string& chunk_handle, const uint32_t& version,
         const uint32_t& offset, const uint32_t& length);
@@ -39,10 +42,12 @@ class FileChunkManager {
         const uint32_t& offset, const uint32_t& length,
         const std::string& data);
 
+    // 将数据追加到块
     google::protobuf::util::StatusOr<uint32_t> AppendToChunk(
         const std::string& chunk_handle, const uint32_t& version,
         const uint32_t& length, const std::string& data);
 
+    // 删除块
     google::protobuf::util::Status DeleteChunk(const std::string& chunk_handle);
 
     // write file chunk to leveldb
@@ -56,6 +61,7 @@ class FileChunkManager {
         const std::string& chunk_handle, const uint32_t& old_version,
         const uint32_t& new_version);
 
+    // 获取块句柄对应的版本号
     google::protobuf::util::StatusOr<uint32_t> GetChunkVersion(
         const std::string& chunk_handle);
 

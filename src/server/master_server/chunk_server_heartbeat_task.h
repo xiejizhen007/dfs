@@ -27,7 +27,7 @@ class ChunkServerHeartBeatTask {
     // 执行心跳包检测服务的线程
     std::unique_ptr<std::thread> thread_;
 
-    std::atomic<bool> stop_heart_beat_task_{flase};
+    std::atomic<bool> stop_heart_beat_task_{false};
 
     std::shared_ptr<dfs::grpc_client::ChunkServerControlServiceClient>
     GetOrCreateChunkServerControlServiceClient(

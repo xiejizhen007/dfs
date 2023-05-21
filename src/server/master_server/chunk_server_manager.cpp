@@ -100,13 +100,17 @@ ChunkServerLocationFlatSet ChunkServerManager::AssignChunkServer(
     }
 
     ChunkServerLocationFlatSet assigned_locations;
-    ChunkServerLocation location;
-    // for now, only one chunk server
-    location.set_server_hostname("127.0.0.1");
-    location.set_server_port(50100);
-    assigned_locations.insert(location);
+    int assigned_nums = 0;
+    // TODO: 选择磁盘剩余空间最多的块服务器
+    for (const auto& chunk_server: chunk_server_maps_) {
+        const auto& location = chunk_server.first;
+        if (assigned_nums >= (int)server_request_nums) {
+            break;
+        }
 
-    chunk_location_maps_[chunk_handle].insert(location);
+        assigned_locations.insert(location);
+        chunk_location_maps_[chunk_handle].insert(location);
+    }
 
     return assigned_locations;
 }

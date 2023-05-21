@@ -1,5 +1,8 @@
 #include "src/client/dfs_client_impl.h"
 
+#include <thread>
+#include <vector>
+
 #include "src/common/system_logger.h"
 #include "src/common/utils.h"
 
@@ -13,8 +16,11 @@ using google::protobuf::util::UnknownError;
 using protos::grpc::DeleteFileRequest;
 using protos::grpc::OpenFileRequest;
 using protos::grpc::ReadFileChunkRequest;
+using protos::grpc::ReadFileChunkRespond;
 using protos::grpc::SendChunkDataRequest;
+using protos::grpc::SendChunkDataRespond;
 using protos::grpc::WriteFileChunkRequest;
+using protos::grpc::WriteFileChunkRespond;
 
 DfsClientImpl::DfsClientImpl() {
     // TODO: read ip:port from config file.
@@ -116,22 +122,6 @@ DfsClientImpl::ReadFileChunk(const std::string& filename, size_t chunk_index,
     request.set_offset(offset);
     request.set_length(nbytes);
 
-    // auto location = entry.primary_location;
-    // std::string server_address = location.server_hostname() + ":" +
-    //                              std::to_string(location.server_port());
-
-    // LOG(INFO) << "try to talk to chunkserver " << server_address;
-
-    // // talk to chunkserver
-    // auto chunk_server_file_service_client =
-    //     GetChunkServerFileServiceClient(server_address);
-
-    // auto respond_or = chunk_server_file_service_client->SendRequest(request);
-    // if (!respond_or.ok()) {
-    //     return respond_or.status();
-    // }
-
-    // return respond_or.value();
     // TODO: 轮询每个 chunkserver，只要有一个成功返回，立马退出
     for (const auto& location : entry.locations) {
         const std::string server_address =
@@ -145,9 +135,33 @@ DfsClientImpl::ReadFileChunk(const std::string& filename, size_t chunk_index,
 
         auto respond_or =
             chunk_server_file_service_client->SendRequest(request);
-        if (respond_or.ok()) {
-            return respond_or.value();
+        if (!respond_or.ok()) {
+            LOG(ERROR) << "read " << chunk_handle
+                       << " error: " << respond_or.status().ToString();
+            return respond_or.status();
         }
+
+        auto respond = respond_or.value();
+        switch (respond.status()) {
+            case ReadFileChunkRespond::UNKNOW:
+                LOG(ERROR) << "read file chunk respond unknow, chunk_handle: "
+                           << chunk_handle;
+                continue;
+            case ReadFileChunkRespond::NOT_FOUND:
+                LOG(ERROR) << "chunk not found: " << chunk_handle;
+                continue;
+            case ReadFileChunkRespond::OUT_OF_RANGE:
+                LOG(ERROR) << "out of range when read " << chunk_handle;
+                continue;
+            case ReadFileChunkRespond::VERSION_ERROR:
+                LOG(ERROR) << "version error when read chunk " << chunk_handle
+                           << " version" << chunk_version;
+                continue;
+            default:
+                break;
+        }
+
+        return respond;
     }
 
     return google::protobuf::util::UnknownError(
@@ -193,56 +207,88 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     size_t chunk_version;
     CacheManager::ChunkServerLocationEntry entry;
     // talk to master or cache
-    auto status = GetChunkMetedata(filename, chunk_index, OpenFileRequest::READ,
-                                   chunk_handle, chunk_version, entry);
-    if (!status.ok()) {
-        return status;
+    auto get_metadata_status =
+        GetChunkMetedata(filename, chunk_index, OpenFileRequest::READ,
+                         chunk_handle, chunk_version, entry);
+    if (!get_metadata_status.ok()) {
+        return get_metadata_status;
     }
 
-    // get chunk server location, handle data write
-    // TODO: retry when write failed
-    auto location = entry.locations.at(0);
-    std::string server_address = location.server_hostname() + ":" +
-                                 std::to_string(location.server_port());
-
+    // 需要发送的数据
     auto data_to_send = data.substr(0, nbytes);
-    // calc checksum
+    // 数据的校验和
     auto checksum = dfs::common::ComputeHash(data_to_send);
 
-    // talk to chunkserver
-    auto chunk_server_file_service_client =
-        GetChunkServerFileServiceClient(server_address);
+    // 数据发送线程
+    std::vector<std::thread> send_data_threads;
+    for (const auto& location : entry.locations) {
+        std::string server_address = location.server_hostname() + ":" +
+                                     std::to_string(location.server_port());
 
-    // send chunk data first
-    SendChunkDataRequest send_request;
-    send_request.set_checksum(checksum);
-    send_request.set_data(data_to_send);
-    auto send_respond_or =
-        chunk_server_file_service_client->SendRequest(send_request);
-    if (!send_respond_or.ok()) {
-        LOG(ERROR) << "send chunk data is failed, because "
-                   << send_respond_or.status().ToString();
-        return send_respond_or.status();
+        send_data_threads.push_back(std::thread([&, server_address]() {
+            // 设置数据发送请求
+            SendChunkDataRequest send_request;
+            send_request.set_checksum(checksum);
+            send_request.set_data(data_to_send);
+            // 获取 grpc 客户端
+            auto chunk_server_file_service_client =
+                GetChunkServerFileServiceClient(server_address);
+            auto send_respond_or =
+                chunk_server_file_service_client->SendRequest(send_request);
+            if (!send_respond_or.ok()) {
+                LOG(ERROR) << "send chunk data is failed, because "
+                           << send_respond_or.status().ToString();
+            } else {
+                // ok
+                auto send_respond = send_respond_or.value();
+                if (send_respond.status() ==
+                    protos::grpc::SendChunkDataRespond::OK) {
+                    LOG(INFO)
+                        << "send chunk data to " << server_address << " is ok";
+                } else {
+                    LOG(ERROR) << "send chunk data to " << server_address
+                               << " failed, because " << send_respond.status();
+                }
+            }
+        }));
     }
 
-    // write data to chunk
-    WriteFileChunkRequest request;
-    request.mutable_header()->set_chunk_handle(chunk_handle);
-    request.mutable_header()->set_version(chunk_version);
-    request.mutable_header()->set_offset(offset);
-    request.mutable_header()->set_length(nbytes);
-    // request.mutable_header()->set_data(data);
-    request.mutable_header()->set_checksum(checksum);
-
-    request.mutable_locations()->Add(std::move(location));
-
-    auto respond_or = chunk_server_file_service_client->SendRequest(request);
-    if (!respond_or.ok()) {
-        LOG(ERROR) << "write file chunk respond is not ok";
-        return respond_or.status();
+    // 等待所有发送线程结束
+    for (auto& thread : send_data_threads) {
+        thread.join();
     }
 
-    return respond_or.value();
+    // TODO:
+    // 将数据写入到主副本块服务器，让主副本块服务器在将更新推送到其他副本的块服务器
+
+    // 将数据写入到所有的块服务器
+    // std::vector<std::thread> write_threads;
+    WriteFileChunkRespond respond;
+    for (const auto& location : entry.locations) {
+        std::string server_address = location.server_hostname() + ":" +
+                                     std::to_string(location.server_port());
+        // 设置写入请求
+        WriteFileChunkRequest write_request;
+        write_request.mutable_header()->set_chunk_handle(chunk_handle);
+        write_request.mutable_header()->set_version(chunk_version);
+        write_request.mutable_header()->set_offset(offset);
+        write_request.mutable_header()->set_length(nbytes);
+        write_request.mutable_header()->set_checksum(checksum);
+
+        // 获取 grpc 客户端
+        auto chunk_server_file_service_client =
+            GetChunkServerFileServiceClient(server_address);
+        auto respond_or =
+            chunk_server_file_service_client->SendRequest(write_request);
+        if (!respond_or.ok()) {
+            LOG(ERROR) << "write file chunk respond is not ok, status: " << respond_or.status().ToString();
+        }
+
+        // TODO: 将写入请求发送给主副本块服务器，由主块服务器应用更改到其他副本服务器
+        respond = respond_or.value();
+    }
+
+    return respond;
 }
 
 std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>

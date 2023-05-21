@@ -23,6 +23,9 @@ class ConfigManager {
 
     std::vector<std::pair<std::string, std::string>> GetAllChunkServer();
 
+    std::string GetChunkServerAddress(const std::string& server_name) const;
+
+    uint32_t GetChunkServerPort(const std::string& server_name) const;
 
    private:
     ConfigManager() = default;

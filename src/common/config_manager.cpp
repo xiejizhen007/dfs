@@ -37,12 +37,12 @@ ConfigManager::GetAllMasterServer() {
     std::vector<std::pair<std::string, std::string>> res;
     auto chunk_servers = root_["master_server"];
     for (int i = 0; i < chunk_servers.size(); i++) {
-
         std::string name = chunk_servers[i]["name"].asString();
         std::string address = chunk_servers[i]["address"].asString();
         uint32_t port = chunk_servers[i]["port"].asUInt();
 
-        res.emplace_back(std::make_pair(name, address + ":" + std::to_string(port)));
+        res.emplace_back(
+            std::make_pair(name, address + ":" + std::to_string(port)));
     }
     return res;
 }
@@ -52,14 +52,42 @@ ConfigManager::GetAllChunkServer() {
     std::vector<std::pair<std::string, std::string>> res;
     auto chunk_servers = root_["chunk_server"];
     for (int i = 0; i < chunk_servers.size(); i++) {
-
         std::string name = chunk_servers[i]["name"].asString();
         std::string address = chunk_servers[i]["address"].asString();
         uint32_t port = chunk_servers[i]["port"].asUInt();
 
-        res.emplace_back(std::make_pair(name, address + ":" + std::to_string(port)));
+        res.emplace_back(
+            std::make_pair(name, address + ":" + std::to_string(port)));
     }
     return res;
+}
+
+std::string ConfigManager::GetChunkServerAddress(
+    const std::string& server_name) const {
+    // TODO: 找一个更优雅的方式
+    auto chunk_servers = root_["chunk_server"];
+    for (int i = 0; i < chunk_servers.size(); i++) {
+        std::string name = chunk_servers[i]["name"].asString();
+        if (name == server_name) {
+            return chunk_servers[i]["address"].asString();
+        }
+    }
+
+    return "";
+}
+
+uint32_t ConfigManager::GetChunkServerPort(
+    const std::string& server_name) const {
+    // TODO: 找一个更优雅的方式
+    auto chunk_servers = root_["chunk_server"];
+    for (int i = 0; i < chunk_servers.size(); i++) {
+        std::string name = chunk_servers[i]["name"].asString();
+        if (name == server_name) {
+            return chunk_servers[i]["port"].asUInt();
+        }
+    }
+
+    return 0;
 }
 
 }  // namespace common

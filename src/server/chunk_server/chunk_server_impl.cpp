@@ -2,6 +2,7 @@
 
 #include <absl/time/time.h>
 
+#include "src/common/config_manager.h"
 #include "src/common/system_logger.h"
 
 namespace dfs {
@@ -17,7 +18,12 @@ ChunkServerImpl* ChunkServerImpl::GetInstance() {
 
 ChunkServerImpl::~ChunkServerImpl() {}
 
-bool ChunkServerImpl::Initialize() {
+bool ChunkServerImpl::Initialize(const std::string& server_name,
+                                 dfs::common::ConfigManager* config_manager) {
+    config_manager_ = config_manager;
+    chunk_server_name_ = server_name;
+    server_address_ = config_manager_->GetChunkServerAddress(server_name);
+    server_port_ = config_manager_->GetChunkServerPort(server_name);
     return true;
 }
 
@@ -26,8 +32,8 @@ bool ChunkServerImpl::ReportToMaster() {
 
     auto chunk_server = request.mutable_chunk_server();
     auto chunk_server_location = chunk_server->mutable_location();
-    chunk_server_location->set_server_hostname("127.0.0.1");
-    chunk_server_location->set_server_port(50100);
+    chunk_server_location->set_server_hostname(server_address_);
+    chunk_server_location->set_server_port(server_port_);
 
     auto all_chunk_data =
         FileChunkManager::GetInstance()->GetAllFileChunkMetadata();

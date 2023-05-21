@@ -5,6 +5,7 @@
 #include <string>
 #include <thread>
 
+#include "src/common/config_manager.h"
 #include "src/grpc_client/chunk_server_manager_service_client.h"
 #include "src/server/chunk_server/file_chunk_manager.h"
 
@@ -15,7 +16,8 @@ class ChunkServerImpl {
    public:
     static ChunkServerImpl* GetInstance();
 
-    bool Initialize();
+    bool Initialize(const std::string& server_name,
+                    dfs::common::ConfigManager* config_manager);
 
     bool ReportToMaster();
 
@@ -31,6 +33,9 @@ class ChunkServerImpl {
     ~ChunkServerImpl();
 
     std::string chunk_server_name_;
+    dfs::common::ConfigManager* config_manager_;
+    std::string server_address_;
+    uint32_t server_port_;
 
     // A special thread, scheduled to execute ReportToMaster
     std::unique_ptr<std::thread> chunk_report_thread_;

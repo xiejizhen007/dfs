@@ -5,6 +5,7 @@ package protos;
 import "chunk_server.proto";
 
 message FileMetadata {
+    // file name
     string filename = 1;
 
     // <chunk index, chunk handle>
@@ -18,6 +19,7 @@ message FileChunkMetadata {
     // chunk's version, newly created file chunk's verison is always 1
     uint32 version = 2;
 
+    //
     ChunkServerLocation primary_location = 3;
 
     // the location information used by the client to cache the chunkserver

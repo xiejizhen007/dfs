@@ -17,14 +17,10 @@ TEST_F(ConfigManagerTest, OpenTest) {
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
 
-    std::filesystem::path executablePath =
-        std::filesystem::canonical("/proc/self/exe");
-    std::string path = executablePath.parent_path().string() + "/config.json";
-
-    std::cout << "Executable path: " << path << std::endl;
-    EXPECT_TRUE(ConfigManager::GetInstance()->InitConfigManager(path));
-
     std::cout << "bin: " << CMAKE_SOURCE_DIR << std::endl;
+    const std::string config_path = std::string(CMAKE_SOURCE_DIR) + "/config.json";
+
+    EXPECT_TRUE(ConfigManager::GetInstance()->InitConfigManager(config_path));
 
     // Run tests
     int exit_code = RUN_ALL_TESTS();

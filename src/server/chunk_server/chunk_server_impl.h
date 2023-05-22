@@ -27,6 +27,16 @@ class ChunkServerImpl {
 
     void RegisterMasterServerClient(const std::string& server_address);
 
+    // 获取块句柄对应的版本号
+    google::protobuf::util::StatusOr<uint32_t> GetChunkVersion(
+        const std::string& chunk_handle);
+
+    void AddOrUpdateLease(const std::string& chunk_handle, const uint64_t& expiration_unix_sec);
+
+    void RemoveLease(const std::string& chunk_handle);
+
+    bool HasWriteLease(const std::string& chunk_handle);
+
    private:
     ChunkServerImpl() = default;
 
@@ -44,6 +54,11 @@ class ChunkServerImpl {
     // use this to report, one master so one client.
     std::shared_ptr<dfs::grpc_client::ChunkServerManagerServiceClient>
         master_server_client_;
+
+    // 租约
+    absl::flat_hash_map<std::string, uint64_t> lease_unix_sec_;
+    // 锁
+    absl::Mutex lease_unix_sec_lock_;
 };
 
 }  // namespace server

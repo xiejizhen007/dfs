@@ -99,5 +99,31 @@ void ChunkServerImpl::RegisterMasterServerClient(
     }
 }
 
+// 获取块句柄对应的版本号
+google::protobuf::util::StatusOr<uint32_t> ChunkServerImpl::GetChunkVersion(
+    const std::string& chunk_handle) {
+    return FileChunkManager::GetInstance()->GetChunkVersion(chunk_handle);
+}
+
+void ChunkServerImpl::AddOrUpdateLease(const std::string& chunk_handle,
+                                       const uint64_t& expiration_unix_sec) {
+    absl::WriterMutexLock lease_unix_sec_lock_guard(&lease_unix_sec_lock_);
+    lease_unix_sec_[chunk_handle] = expiration_unix_sec;
+}
+
+void ChunkServerImpl::RemoveLease(const std::string& chunk_handle) {
+    absl::WriterMutexLock lease_unix_sec_lock_guard(&lease_unix_sec_lock_);
+    lease_unix_sec_.erase(chunk_handle);
+}
+
+bool ChunkServerImpl::HasWriteLease(const std::string& chunk_handle) {
+    absl::ReaderMutexLock lease_unix_sec_lock_guard(&lease_unix_sec_lock_);
+    if (!lease_unix_sec_.contains(chunk_handle)) {
+        return false;
+    }
+
+    return absl::Now() < absl::FromUnixSeconds(lease_unix_sec_[chunk_handle]);
+}
+
 }  // namespace server
 }  // namespace dfs

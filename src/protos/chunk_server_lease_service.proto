@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package protos.grpc;
+
+import "google/protobuf/timestamp.proto";
+
+// 块服务器提供的租约服务
+service ChunkServerLeaseService {
+    // 申请租约
+    rpc GrantLease(GrantLeaseRequest) returns (GrantLeaseRespond) {}
+    // 撤销租约
+    rpc RevokeLease(RevokeLeaseRequest) returns (RevokeLeaseRespond) {}
+}
+
+message GrantLeaseRequest {
+    // 块句柄
+    string chunk_handle = 1;
+    // 块版本
+    uint32 chunk_version = 2;
+    // 租约过期时的 unix 时间戳
+    google.protobuf.Timestamp lease_expiration_time = 3;
+}
+
+message GrantLeaseRespond {
+    // 原始请求
+    GrantLeaseRequest request = 1;
+    // 申请状态枚举
+    enum GrantLeaseRespondStatus {
+        UNKNOW = 0;
+        // 成功申请
+        ACCEPTED = 1;
+        // 申请时时间戳已经过期
+        REJECTED_EXPIRED = 2;
+        // 系统中没有对应的块句柄
+        REJECTED_NOT_FOUND = 3;
+        // 系统中没有对应的版本
+        REJECTED_VERSION = 4;
+    };
+    // 申请状态
+    GrantLeaseRespondStatus status = 2;
+}
+
+message RevokeLeaseRequest {
+    //
+}
+
+message RevokeLeaseRespond {
+}

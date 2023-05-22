@@ -15,9 +15,7 @@ set(proto_files
     ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_control_service.proto
     ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_file_service.proto
     ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_manager_service.proto
-    # hello.proto
-    # chunk_server.proto
-    # metadata.proto
+    ${PROJECT_SOURCE_DIR}/src/protos/chunk_server_lease_service.proto
 )
 
 # Add Library target

@@ -111,6 +111,22 @@ target_link_libraries(chunk_server_file_service_impl_test
     grpc_client_shared
 )
 
+add_executable(chunk_server_lease_service_impl_test
+    server/chunk_server/chunk_server_lease_service_impl_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_cache_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_file_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_lease_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_impl.cpp
+)
+
+target_link_libraries(chunk_server_lease_service_impl_test
+    ${GTEST_BOTH_LIBRARIES}
+    leveldb
+    protos_shared
+    grpc_client_shared
+)
+
 add_executable(file_chunk_manager_test
     server/chunk_server/file_chunk_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp

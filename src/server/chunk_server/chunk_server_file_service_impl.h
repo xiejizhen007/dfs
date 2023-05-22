@@ -34,6 +34,16 @@ class ChunkServerFileServiceImpl final
         const protos::grpc::SendChunkDataRequest* request,
         protos::grpc::SendChunkDataRespond* respond) override;
 
+    grpc::Status ApplyMutation(
+        grpc::ServerContext* context,
+        const protos::grpc::ApplyMutationRequest* request,
+        protos::grpc::ApplyMutationRespond* respond) override;
+
+    grpc::Status AdjustFileChunkVersion(
+        grpc::ServerContext* context,
+        const protos::grpc::AdjustFileChunkVersionRequest* request,
+        protos::grpc::AdjustFileChunkVersionRespond* respond) override;
+
    private:
     FileChunkManager* file_chunk_manager();
 

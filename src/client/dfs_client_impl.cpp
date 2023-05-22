@@ -208,7 +208,7 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     CacheManager::ChunkServerLocationEntry entry;
     // talk to master or cache
     auto get_metadata_status =
-        GetChunkMetedata(filename, chunk_index, OpenFileRequest::READ,
+        GetChunkMetedata(filename, chunk_index, OpenFileRequest::WRITE,
                          chunk_handle, chunk_version, entry);
     if (!get_metadata_status.ok()) {
         return get_metadata_status;

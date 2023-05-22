@@ -3,12 +3,19 @@
 #include "src/common/system_logger.h"
 #include "src/common/utils.h"
 #include "src/server/chunk_server/chunk_cache_manager.h"
+#include "src/server/chunk_server/chunk_server_impl.h"
 
 namespace dfs {
 namespace server {
 
+using dfs::common::StatusProtobuf2Grpc;
+using google::protobuf::util::IsNotFound;
+using protos::grpc::AdjustFileChunkVersionRespond;
 using protos::grpc::FileChunkMutationStatus;
 using protos::grpc::SendChunkDataRespond;
+using protos::grpc::WriteFileChunkRespond;
+using protos::grpc::ApplyMutationRequest;
+using protos::grpc::ApplyMutationRespond;
 
 FileChunkManager* ChunkServerFileServiceImpl::file_chunk_manager() {
     return FileChunkManager::GetInstance();
@@ -121,6 +128,25 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
 
     // write successful
     // TODO: apply changes to other chunk server
+    for (auto location : request->locations()) {
+        const std::string server_address =
+            location.server_hostname() + ":" +
+            std::to_string(location.server_port());
+        auto client =
+            ChunkServerImpl::GetInstance()
+                ->GetOrCreateChunkServerFileServerClient(server_address);
+        if (!client) {
+            LOG(ERROR)
+                << "can not get or create file service client, server_address: "
+                << server_address;
+            continue;
+        }
+
+        ApplyMutationRequest apply_mutation_request;
+        *apply_mutation_request.mutable_headers() = request->header();
+        auto apply_mutation_respond = client->SendRequest(apply_mutation_request);
+        // TODO: use apply_mutation_respond
+    }
 
     return grpc::Status::OK;
 }
@@ -188,6 +214,72 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
         return grpc::Status::OK;
     } else {
         return dfs::common::StatusProtobuf2Grpc(write_result.status());
+    }
+}
+
+grpc::Status ChunkServerFileServiceImpl::ApplyMutation(
+    grpc::ServerContext* context,
+    const protos::grpc::ApplyMutationRequest* request,
+    protos::grpc::ApplyMutationRespond* respond) {
+    LOG(INFO) << "ApplyMutationRequest";
+    // 应用对数据块的更改
+    WriteFileChunkRespond write_respond;
+    // 将数据写入本地
+    auto status = WriteFileChunkLocally(request->headers(), &write_respond);
+    respond->set_status(write_respond.status());
+    return status;
+}
+
+grpc::Status ChunkServerFileServiceImpl::AdjustFileChunkVersion(
+    grpc::ServerContext* context,
+    const protos::grpc::AdjustFileChunkVersionRequest* request,
+    protos::grpc::AdjustFileChunkVersionRespond* respond) {
+    LOG(INFO) << "AdjustFileChunkVersionRequest";
+    // 正常来说，在调整数据块版本时，我们只对版本号 +1
+    const uint32_t old_version = request->new_chunk_version() - 1;
+    auto update_version = file_chunk_manager()->UpdateChunkVersion(
+        request->chunk_handle(), old_version, request->new_chunk_version());
+    if (update_version.ok()) {
+        LOG(INFO) << "update file chunk " << request->chunk_handle()
+                  << " to version " << request->new_chunk_version();
+        respond->set_status(AdjustFileChunkVersionRespond::OK);
+        respond->set_chunk_version(request->new_chunk_version());
+        return grpc::Status::OK;
+    } else if (IsNotFound(update_version)) {
+        // 是不是因为版本导致找不到数据块？
+        auto version_or =
+            file_chunk_manager()->GetChunkVersion(request->chunk_handle());
+        if (version_or.ok()) {
+            // 数据块存在，说明是因为数据块版本不同步导致的数据写入错误
+            LOG(ERROR) << "file chunk " << request->chunk_handle()
+                       << " version is not sync, chunk server has version "
+                       << version_or.value()
+                       << " but request try to update version from "
+                       << old_version << " to " << request->new_chunk_version();
+            respond->set_status(
+                AdjustFileChunkVersionRespond::FAILED_VERSION_NOT_SYNC);
+            return grpc::Status::OK;
+        } else {
+            // 数据块不存在？
+            if (IsNotFound(version_or.status())) {
+                LOG(ERROR) << "try to update file chunk "
+                           << request->chunk_handle()
+                           << " but chunk does not exist";
+                respond->set_status(
+                    AdjustFileChunkVersionRespond::FAILED_NOT_FOUND);
+                return grpc::Status::OK;
+            } else {
+                // 其他错误
+                LOG(ERROR) << "Unknow error in AdjustFileChunkVersion, status: "
+                           << version_or.status().ToString();
+                return StatusProtobuf2Grpc(version_or.status());
+            }
+        }
+    } else {
+        // 其他类型的错误
+        LOG(ERROR) << "Unknow error in AdjustFileChunkVersion, status: "
+                   << update_version.ToString();
+        return StatusProtobuf2Grpc(update_version);
     }
 }
 

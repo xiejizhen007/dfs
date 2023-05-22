@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "src/common/config_manager.h"
+#include "src/grpc_client/chunk_server_file_service_client.h"
 #include "src/grpc_client/chunk_server_manager_service_client.h"
 #include "src/server/chunk_server/file_chunk_manager.h"
 
@@ -31,11 +32,15 @@ class ChunkServerImpl {
     google::protobuf::util::StatusOr<uint32_t> GetChunkVersion(
         const std::string& chunk_handle);
 
-    void AddOrUpdateLease(const std::string& chunk_handle, const uint64_t& expiration_unix_sec);
+    void AddOrUpdateLease(const std::string& chunk_handle,
+                          const uint64_t& expiration_unix_sec);
 
     void RemoveLease(const std::string& chunk_handle);
 
     bool HasWriteLease(const std::string& chunk_handle);
+
+    std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+    GetOrCreateChunkServerFileServerClient(const std::string& server_address);
 
    private:
     ChunkServerImpl() = default;
@@ -59,6 +64,13 @@ class ChunkServerImpl {
     absl::flat_hash_map<std::string, uint64_t> lease_unix_sec_;
     // 锁
     absl::Mutex lease_unix_sec_lock_;
+
+    absl::flat_hash_map<
+        std::string,
+        std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>>
+        chunk_server_file_server_clients_;
+
+    absl::Mutex chunk_server_file_server_clients_lock_;
 };
 
 }  // namespace server

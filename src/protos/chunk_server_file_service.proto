@@ -14,10 +14,15 @@ service ChunkServerFileService {
     // client call
     rpc WriteFileChunk(WriteFileChunkRequest) returns(WriteFileChunkRespond) {}
 
+    // 客户端调用该接口，将待写入数据及其校验和发送至块服务器
     rpc SendChunkData(SendChunkDataRequest) returns(SendChunkDataRespond) {}
 
-    // primary chunkserver call
-    // rpc ApplyMutation()
+    // 由主副本服务器调用，在它将数据写入到数据写入到本地后
+    // 调用该接口，通知其他副本服务器应用数据写入
+    rpc ApplyMutation(ApplyMutationRequest) returns(ApplyMutationRespond) {}
+
+    // 主服务器调用该接口，修改副本服务器数据块版本
+    rpc AdjustFileChunkVersion(AdjustFileChunkVersionRequest) returns(AdjustFileChunkVersionRespond) {}
 }
 
 message InitFileChunkRequest {
@@ -121,11 +126,36 @@ message SendChunkDataRespond {
 }
 
 message ApplyMutationRequest {
-    repeated WriteFileChunkRequestHeader headers = 1;
+    WriteFileChunkRequestHeader headers = 1;
 }
 
 message ApplyMutationRespond {
     ApplyMutationRequest request = 1;
 
     FileChunkMutationStatus status = 2;
+}
+
+
+message AdjustFileChunkVersionRequest {
+    string chunk_handle = 1;
+    // 将 chunk_handle 对应数据块的版本设置为该值
+    uint32 new_chunk_version = 2;
+}
+
+message AdjustFileChunkVersionRespond {
+    AdjustFileChunkVersionRequest request = 1;
+
+    enum AdjustFileChunkVersionRespondStatus {
+        UNKNOW = 0;
+        // 修改版本成功
+        OK = 1;
+        // 未找到对应 chunk_handle 对应得数据块
+        FAILED_NOT_FOUND = 2;
+        // 版本不同步
+        FAILED_VERSION_NOT_SYNC = 3;
+    };
+
+    AdjustFileChunkVersionRespondStatus status = 2;
+    // 应该与请求中的 new_chunk_version 相对应
+    uint32 chunk_version = 3;
 }

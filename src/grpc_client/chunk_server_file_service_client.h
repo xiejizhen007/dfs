@@ -28,6 +28,12 @@ class ChunkServerFileServiceClient {
     google::protobuf::util::StatusOr<protos::grpc::SendChunkDataRespond>
     SendRequest(const protos::grpc::SendChunkDataRequest& request);
 
+    google::protobuf::util::StatusOr<protos::grpc::ApplyMutationRespond>
+    SendRequest(const protos::grpc::ApplyMutationRequest& request);
+
+    google::protobuf::util::StatusOr<protos::grpc::AdjustFileChunkVersionRespond>
+    SendRequest(const protos::grpc::AdjustFileChunkVersionRequest& request);
+
    private:
     std::unique_ptr<protos::grpc::ChunkServerFileService::Stub> stub_;
 };

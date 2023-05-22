@@ -8,6 +8,7 @@
 namespace dfs {
 namespace server {
 
+using dfs::grpc_client::ChunkServerFileServiceClient;
 using dfs::grpc_client::ChunkServerManagerServiceClient;
 using protos::grpc::ReportChunkServerRequest;
 
@@ -123,6 +124,27 @@ bool ChunkServerImpl::HasWriteLease(const std::string& chunk_handle) {
     }
 
     return absl::Now() < absl::FromUnixSeconds(lease_unix_sec_[chunk_handle]);
+}
+
+std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+ChunkServerImpl::GetOrCreateChunkServerFileServerClient(
+    const std::string& server_address) {
+    {
+        absl::ReaderMutexLock chunk_server_file_server_clients_lock_guard(
+            &chunk_server_file_server_clients_lock_);
+        if (chunk_server_file_server_clients_.contains(server_address)) {
+            return chunk_server_file_server_clients_[server_address];
+        }
+    }
+
+    absl::WriterMutexLock chunk_server_file_server_clients_lock_guard(
+        &chunk_server_file_server_clients_lock_);
+    // create a new client
+    chunk_server_file_server_clients_[server_address] =
+        std::make_shared<ChunkServerFileServiceClient>(grpc::CreateChannel(
+            server_address, grpc::InsecureChannelCredentials()));
+
+    return chunk_server_file_server_clients_[server_address];
 }
 
 }  // namespace server

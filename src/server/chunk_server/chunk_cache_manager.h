@@ -10,13 +10,17 @@ namespace server {
 
 class ChunkCacheManager {
    public:
+    // 获取单例对象
     static ChunkCacheManager* GetInstance();
 
+    // 通过校验和获取对应数据
     google::protobuf::util::StatusOr<std::string> Get(const std::string& key);
 
+    // 以校验和为键，数据为值，添加至缓存中
     google::protobuf::util::Status Set(const std::string& key,
                                        const std::string& value);
 
+    // 从缓存中清除掉校验和对应的数据
     google::protobuf::util::Status Remove(const std::string& key);
 
    private:

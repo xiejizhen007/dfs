@@ -3,9 +3,9 @@
 namespace dfs {
 namespace client {
 
-using google::protobuf::util::OkStatus;
 using google::protobuf::util::AlreadyExistsError;
 using google::protobuf::util::IsAlreadyExists;
+using google::protobuf::util::OkStatus;
 
 static DfsClientImpl* client_impl_ = nullptr;
 
@@ -43,8 +43,8 @@ google::protobuf::util::StatusOr<Data> read(const std::string& filename,
 }
 
 google::protobuf::util::StatusOr<size_t> write(const std::string& filename,
-                                     const std::string& data, size_t offset,
-                                     size_t nbytes) {
+                                               const std::string& data,
+                                               size_t offset, size_t nbytes) {
     auto write_or = client_impl_->WriteFile(filename, data, offset, nbytes);
     return write_or;
 }
@@ -55,6 +55,11 @@ google::protobuf::util::Status remove(const std::string& filename) {
 
 google::protobuf::util::Status close(const std::string& filename) {
     return OkStatus();
+}
+
+void reset_client() {
+    delete client_impl_;
+    client_impl_ = nullptr;
 }
 
 }  // namespace client

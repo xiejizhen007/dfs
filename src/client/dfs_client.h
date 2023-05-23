@@ -29,12 +29,14 @@ google::protobuf::util::StatusOr<Data> read(const std::string& filename,
                                             size_t offset, size_t nbytes);
 
 google::protobuf::util::StatusOr<size_t> write(const std::string& filename,
-                                     const std::string& data, size_t offset,
-                                     size_t nbytes);
+                                               const std::string& data,
+                                               size_t offset, size_t nbytes);
 
 google::protobuf::util::Status remove(const std::string& filename);
 
 google::protobuf::util::Status close(const std::string& filename);
+
+void reset_client();
 
 }  // namespace client
 }  // namespace dfs

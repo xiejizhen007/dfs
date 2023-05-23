@@ -102,6 +102,7 @@ add_executable(chunk_server_file_service_impl_test
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_cache_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_file_service_impl.cpp
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_impl.cpp
 )
 
 target_link_libraries(chunk_server_file_service_impl_test
@@ -137,3 +138,15 @@ target_link_libraries(file_chunk_manager_test
     leveldb
     protos_shared
 )
+
+find_package(benchmark REQUIRED)
+
+add_executable(benchmark_app benchmarks/benchmarks.cpp)
+target_link_libraries(benchmark_app benchmark::benchmark)
+
+add_executable(benchmark_read benchmarks/read.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/client_cache_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client_impl.cpp
+)
+target_link_libraries(benchmark_read benchmark::benchmark protos_shared common_shared grpc_client_shared)

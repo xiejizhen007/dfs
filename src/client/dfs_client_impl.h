@@ -7,6 +7,7 @@
 
 #include "master_metadata_service.grpc.pb.h"
 #include "src/client/client_cache_manager.h"
+#include "src/common/config_manager.h"
 #include "src/common/utils.h"
 #include "src/grpc_client/chunk_server_file_service_client.h"
 #include "src/grpc_client/master_metadata_service_client.h"
@@ -64,6 +65,8 @@ class DfsClientImpl {
         master_metadata_service_client_;
 
     std::shared_ptr<CacheManager> cache_manager_;
+
+    dfs::common::ConfigManager* config_manager_;
 };
 
 }  // namespace client

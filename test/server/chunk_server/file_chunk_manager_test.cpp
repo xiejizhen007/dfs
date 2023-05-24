@@ -8,7 +8,7 @@ class FileChunkManagerTest : public ::testing::Test {
    protected:
     void SetUp() override {
         fileChunkManager_ = FileChunkManager::GetInstance();
-        fileChunkManager_->Initialize("./gtest_file_chunks", dfs::common::bytesMB * 4);
+        fileChunkManager_->Initialize("file_chunk_manager_test", 1024);
     }
 
     FileChunkManager* fileChunkManager_;

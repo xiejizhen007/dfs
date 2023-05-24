@@ -1,5 +1,6 @@
 #include "src/server/chunk_server/chunk_server_file_service_impl.h"
 
+#include "src/common/config_manager.h"
 #include "src/common/system_logger.h"
 #include "src/common/utils.h"
 #include "src/server/chunk_server/chunk_cache_manager.h"
@@ -8,14 +9,15 @@
 namespace dfs {
 namespace server {
 
+using dfs::common::ConfigManager;
 using dfs::common::StatusProtobuf2Grpc;
 using google::protobuf::util::IsNotFound;
 using protos::grpc::AdjustFileChunkVersionRespond;
+using protos::grpc::ApplyMutationRequest;
+using protos::grpc::ApplyMutationRespond;
 using protos::grpc::FileChunkMutationStatus;
 using protos::grpc::SendChunkDataRespond;
 using protos::grpc::WriteFileChunkRespond;
-using protos::grpc::ApplyMutationRequest;
-using protos::grpc::ApplyMutationRespond;
 
 FileChunkManager* ChunkServerFileServiceImpl::file_chunk_manager() {
     return FileChunkManager::GetInstance();
@@ -29,8 +31,8 @@ grpc::Status ChunkServerFileServiceImpl::InitFileChunk(
     const std::string& chunk_handle = request->chunk_handle();
 
     // add log
+    LOG(INFO) << "create a chunk for chunk handle: " << chunk_handle;
 
-    //
     auto status = file_chunk_manager()->CreateChunk(chunk_handle, 1);
     if (status.ok()) {
         // successfully created
@@ -57,9 +59,9 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     const uint32_t& length = request->length();
 
     //
-    LOG(INFO) << "try to read chunk, uuid: " + chunk_handle
-              << "version: " + version << "offset: " + offset
-              << "length: " + length;
+    LOG(INFO) << "try to read chunk, chunk_handle: " << chunk_handle
+              << ",version: " << version << ",offset: " << offset
+              << ",length: " << length;
 
     auto read_status_or = file_chunk_manager()->ReadFromChunk(
         chunk_handle, version, offset, length);
@@ -103,8 +105,10 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     }
 
     const auto& read_data = read_status_or.value();
-    LOG(INFO) << "read_data: " << read_data << "  "
-              << "length: " << read_data.size();
+    // LOG(INFO) << "read_data: " << read_data << "  "
+    //           << "length: " << read_data.size();
+
+    LOG(INFO) << "data length: " << read_data.size();
 
     respond->set_data(read_data);
     respond->set_read_length(read_data.size());
@@ -144,7 +148,8 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
 
         ApplyMutationRequest apply_mutation_request;
         *apply_mutation_request.mutable_headers() = request->header();
-        auto apply_mutation_respond = client->SendRequest(apply_mutation_request);
+        auto apply_mutation_respond =
+            client->SendRequest(apply_mutation_request);
         // TODO: use apply_mutation_respond
     }
 
@@ -157,7 +162,8 @@ grpc::Status ChunkServerFileServiceImpl::SendChunkData(
     protos::grpc::SendChunkDataRespond* respond) {
     *respond->mutable_request() = *request;
     // data too big
-    if (request->data().size() > 4 * dfs::common::bytesMB) {
+    if (request->data().size() >
+        ConfigManager::GetInstance()->GetBlockSize() * dfs::common::bytesMB) {
         LOG(ERROR) << "send chunk data is too big";
         respond->set_status(SendChunkDataRespond::DATA_TOO_BIG);
         return grpc::Status::OK;
@@ -171,9 +177,8 @@ grpc::Status ChunkServerFileServiceImpl::SendChunkData(
         return grpc::Status::OK;
     }
 
-    // cache
+    LOG(INFO) << "caching data";
     ChunkCacheManager::GetInstance()->Set(request->checksum(), request->data());
-    LOG(INFO) << "send chunk data, data is cached";
     respond->set_status(SendChunkDataRespond::OK);
 
     return grpc::Status::OK;

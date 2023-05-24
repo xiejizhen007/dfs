@@ -24,6 +24,8 @@ message OpenFileRequest {
     };
 
     OpenMode mode = 3;
+
+    bool create_if_not_exists = 4;
 }
 
 message OpenFileRespond {

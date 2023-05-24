@@ -43,9 +43,13 @@ int main(int argc, char* argv[]) {
     std::string server_address = address + ":" + std::to_string(port);
     LOG(INFO) << chunk_server_name << " listen on " << server_address;
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+
+    builder.SetMaxReceiveMessageSize(
+        ConfigManager::GetInstance()->GetBlockSize() * dfs::common::bytesMB + 1000);
+
     // initialize file chunk manager
     FileChunkManager::GetInstance()->Initialize(chunk_server_name,
-                                                dfs::common::bytesMB * 4);
+                                                dfs::common::bytesMB * 64);
 
     ChunkServerControlServiceImpl control_service;
     builder.RegisterService(&control_service);

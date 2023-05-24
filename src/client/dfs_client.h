@@ -36,6 +36,8 @@ google::protobuf::util::Status remove(const std::string& filename);
 
 google::protobuf::util::Status close(const std::string& filename);
 
+google::protobuf::util::Status upload(const std::string& filename);
+
 void reset_client();
 
 }  // namespace client

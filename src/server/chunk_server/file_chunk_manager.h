@@ -28,6 +28,7 @@ class FileChunkManager {
 
     // interacting with leveldb
 
+    // 创建数据块，指定了块句柄以及版本
     google::protobuf::util::Status CreateChunk(const std::string& chunk_handle,
                                                const uint32_t& chunk_version);
 

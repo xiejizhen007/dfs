@@ -114,7 +114,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     const uint32_t chunk_index = request->chunk_index();
 
     //
-    if (!metadata_manager()->ExistFileMetadata(filename)) {
+    if (!metadata_manager()->ExistFileMetadata(filename) &&
+        !request->create_if_not_exists()) {
         LOG(ERROR) << "HandleFileChunkWrite: can't read file, no exist "
                    << filename;
         return grpc::Status(grpc::StatusCode::NOT_FOUND,
@@ -124,8 +125,20 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     auto chunk_handle_or =
         metadata_manager()->GetChunkHandle(filename, chunk_index);
     if (!chunk_handle_or.ok()) {
-        LOG(ERROR) << "HandleFileChunkWrite: can't get chunk handle";
-        return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
+        if (!request->create_if_not_exists()) {
+            LOG(ERROR) << "HandleFileChunkWrite: can't get chunk handle";
+            return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
+        }
+
+        LOG(INFO) << "create a file chunk for " << filename
+                  << " at chunk index " << chunk_index;
+        auto chunk_create_status = HandleFileChunkCreation(request, respond);
+        if (!chunk_create_status.ok()) {
+            return chunk_create_status;
+        }
+        // 刷新 chunk handle
+        auto chunk_handle_or =
+            metadata_manager()->GetChunkHandle(filename, chunk_index);
     }
 
     // get the chunk handle

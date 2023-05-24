@@ -3,12 +3,14 @@
 #include <thread>
 #include <vector>
 
+#include "src/common/config_manager.h"
 #include "src/common/system_logger.h"
 #include "src/common/utils.h"
 
 namespace dfs {
 namespace client {
 
+using dfs::common::ConfigManager;
 using dfs::grpc_client::ChunkServerFileServiceClient;
 using dfs::grpc_client::MasterMetadataServiceClient;
 using google::protobuf::util::OkStatus;
@@ -31,6 +33,8 @@ DfsClientImpl::DfsClientImpl() {
         std::make_shared<MasterMetadataServiceClient>(channel);
 
     cache_manager_ = std::make_shared<CacheManager>();
+
+    config_manager_ = ConfigManager::GetInstance();
 }
 
 google::protobuf::util::Status DfsClientImpl::CreateFile(
@@ -60,9 +64,8 @@ google::protobuf::util::Status DfsClientImpl::DeleteFile(
 google::protobuf::util::StatusOr<std::pair<size_t, std::string>>
 DfsClientImpl::ReadFile(const std::string& filename, size_t offset,
                         size_t nbytes) {
-    // 一个 chunk 4MB
-    // TODO: use config file
-    const size_t chunk_size = 4 * common::bytesMB;
+    // 一个 chunk 64MB
+    const size_t chunk_size = config_manager_->GetBlockSize() * common::bytesMB;
 
     size_t bytes_read = 0;
     size_t remain_bytes = nbytes;
@@ -172,7 +175,7 @@ google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
     const std::string& filename, const std::string& data, size_t offset,
     size_t nbytes) {
     // TODO: use config file, chunk is 4MB
-    const size_t chunk_size = 4 * common::bytesMB;
+    const size_t chunk_size = config_manager_->GetBlockSize() * common::bytesMB;
     size_t chunk_start_offset = offset % chunk_size;
     size_t remain_bytes = nbytes;
     size_t bytes_write = 0;
@@ -281,10 +284,12 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         auto respond_or =
             chunk_server_file_service_client->SendRequest(write_request);
         if (!respond_or.ok()) {
-            LOG(ERROR) << "write file chunk respond is not ok, status: " << respond_or.status().ToString();
+            LOG(ERROR) << "write file chunk respond is not ok, status: "
+                       << respond_or.status().ToString();
         }
 
-        // TODO: 将写入请求发送给主副本块服务器，由主块服务器应用更改到其他副本服务器
+        // TODO:
+        // 将写入请求发送给主副本块服务器，由主块服务器应用更改到其他副本服务器
         respond = respond_or.value();
     }
 
@@ -304,9 +309,15 @@ DfsClientImpl::GetChunkServerFileServiceClient(const std::string& address) {
 
 bool DfsClientImpl::RegisterChunkServerFileServiceClient(
     const std::string& address) {
+    // 设置客户端发送rpc消息大小
+    grpc::ChannelArguments channel_args;
+    channel_args.SetMaxReceiveMessageSize(
+        config_manager_->GetBlockSize() * dfs::common::bytesMB + 1000);
+
     std::shared_ptr<ChunkServerFileServiceClient> file_service_client =
         std::make_shared<ChunkServerFileServiceClient>(
-            grpc::CreateChannel(address, grpc::InsecureChannelCredentials()));
+            grpc::CreateCustomChannel(
+                address, grpc::InsecureChannelCredentials(), channel_args));
     return chunk_server_file_service_clients_.TryInsert(address,
                                                         file_service_client);
 }
@@ -376,9 +387,11 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
         request.set_filename(filename);
         request.set_chunk_index(chunk_index);
         request.set_mode(openmode);
+        request.set_create_if_not_exists(openmode == OpenFileRequest::WRITE);
 
         auto respond_or = master_metadata_service_client_->SendRequest(request);
         if (!respond_or.ok()) {
+            LOG(INFO) << "can not get respond when send request to master";
             return respond_or.status();
         }
 

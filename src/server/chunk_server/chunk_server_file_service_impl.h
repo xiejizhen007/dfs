@@ -10,35 +10,37 @@ namespace server {
 class ChunkServerFileServiceImpl final
     : public protos::grpc::ChunkServerFileService::Service {
    public:
-    // master call
+    // 主服务器调用，用于创建数据块
     grpc::Status InitFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::InitFileChunkRequest* request,
         protos::grpc::InitFileChunkRespond* respond) override;
 
-    // client or other chunkserver call
+    // 客户端调用，用于读取数据块
     grpc::Status ReadFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::ReadFileChunkRequest* request,
         protos::grpc::ReadFileChunkRespond* respond) override;
 
-    // client call
+    // 客户端调用，写入数据块
     grpc::Status WriteFileChunk(
         grpc::ServerContext* context,
         const protos::grpc::WriteFileChunkRequest* request,
         protos::grpc::WriteFileChunkRespond* respond) override;
 
-    // client call
+    // 客户端调用，将数据与校验和发送至块服务器
     grpc::Status SendChunkData(
         grpc::ServerContext* context,
         const protos::grpc::SendChunkDataRequest* request,
         protos::grpc::SendChunkDataRespond* respond) override;
 
+    // 主副本服务器调用，将数据写入至其他的副本服务器
     grpc::Status ApplyMutation(
         grpc::ServerContext* context,
         const protos::grpc::ApplyMutationRequest* request,
         protos::grpc::ApplyMutationRespond* respond) override;
 
+    // 主服务器调用，更新数据块版本号
     grpc::Status AdjustFileChunkVersion(
         grpc::ServerContext* context,
         const protos::grpc::AdjustFileChunkVersionRequest* request,

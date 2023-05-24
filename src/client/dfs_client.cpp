@@ -1,11 +1,16 @@
 #include "src/client/dfs_client.h"
 
+#include <fstream>
+#include <iostream>
+#include <string>
+
 namespace dfs {
 namespace client {
 
 using google::protobuf::util::AlreadyExistsError;
 using google::protobuf::util::IsAlreadyExists;
 using google::protobuf::util::OkStatus;
+using google::protobuf::util::UnknownError;
 
 static DfsClientImpl* client_impl_ = nullptr;
 
@@ -55,6 +60,25 @@ google::protobuf::util::Status remove(const std::string& filename) {
 
 google::protobuf::util::Status close(const std::string& filename) {
     return OkStatus();
+}
+
+google::protobuf::util::Status upload(const std::string& filename) {
+    std::ifstream file(filename);  // 指定要写入的文件名
+
+    if (file.is_open()) {
+        std::string line;
+        std::getline(file, line);
+        std::cout << line.size() << std::endl;
+        // filename 为绝对路径
+        // 获取文件名
+        auto pos = filename.find_last_of('/');
+        write(filename.substr(pos), line, 0, line.size());
+        file.close();
+        return OkStatus();
+    } else {
+        std::cout << "无法打开文件" << std::endl;
+        return UnknownError("can not open file");
+    }
 }
 
 void reset_client() {

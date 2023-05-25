@@ -110,6 +110,7 @@ ChunkServerLocationFlatSet ChunkServerManager::AssignChunkServer(
 
         assigned_locations.insert(location);
         chunk_location_maps_[chunk_handle].insert(location);
+        assigned_nums++;
     }
 
     return assigned_locations;

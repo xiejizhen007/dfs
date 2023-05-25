@@ -130,15 +130,24 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
             return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
         }
 
-        LOG(INFO) << "create a file chunk for " << filename
+        LOG(INFO) << "will create a file chunk for " << filename
                   << " at chunk index " << chunk_index;
         auto chunk_create_status = HandleFileChunkCreation(request, respond);
         if (!chunk_create_status.ok()) {
+            LOG(ERROR) << "create file chunk failed, because "
+                       << chunk_create_status.error_message();
             return chunk_create_status;
         }
+
+        LOG(INFO) << "Successfully create file chunk.";
+
         // 刷新 chunk handle
         auto chunk_handle_or =
             metadata_manager()->GetChunkHandle(filename, chunk_index);
+    }
+
+    if (!chunk_handle_or.ok()) {
+        LOG(ERROR) << "what happend";
     }
 
     // get the chunk handle
@@ -146,7 +155,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     auto file_chunk_metadata_or =
         metadata_manager()->GetFileChunkMetadata(chunk_handle);
     if (!file_chunk_metadata_or.ok()) {
-        LOG(ERROR) << "";
+        LOG(ERROR) << "no file chunk metadata for " << filename
+                   << ",index: " << chunk_index << ",handle: " << chunk_handle;
         return dfs::common::StatusProtobuf2Grpc(
             file_chunk_metadata_or.status());
     }

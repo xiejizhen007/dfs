@@ -45,11 +45,13 @@ int main(int argc, char* argv[]) {
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
     builder.SetMaxReceiveMessageSize(
-        ConfigManager::GetInstance()->GetBlockSize() * dfs::common::bytesMB + 1000);
+        ConfigManager::GetInstance()->GetBlockSize() * dfs::common::bytesMB +
+        1000);
 
     // initialize file chunk manager
-    FileChunkManager::GetInstance()->Initialize(chunk_server_name,
-                                                dfs::common::bytesMB * 64);
+    FileChunkManager::GetInstance()->Initialize(
+        chunk_server_name,
+        dfs::common::bytesMB * ConfigManager::GetInstance()->GetBlockSize());
 
     ChunkServerControlServiceImpl control_service;
     builder.RegisterService(&control_service);

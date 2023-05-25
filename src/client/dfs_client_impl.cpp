@@ -356,29 +356,30 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
     const OpenFileRequest::OpenMode& openmode, std::string& chunk_handle,
     size_t& chunk_version, CacheManager::ChunkServerLocationEntry& entry) {
     bool metedata_in_cache = true;
-    // get chunk_handle, chunk_version, entry from cache.
-    auto cache_chunk_handle_or =
-        cache_manager_->GetChunkHandle(filename, chunk_index);
-    if (cache_chunk_handle_or.ok()) {
-        chunk_handle = cache_chunk_handle_or.value();
-        auto cache_chunk_version_or =
-            cache_manager_->GetChunkVersion(chunk_handle);
-        if (cache_chunk_version_or.ok()) {
-            chunk_version = cache_chunk_version_or.value();
-            auto cache_chunk_server_location_or =
-                cache_manager_->GetChunkServerLocationEntry(chunk_handle);
-            if (cache_chunk_server_location_or.ok()) {
-                LOG(INFO) << "file metadata in cache";
-                entry = cache_chunk_server_location_or.value();
-            } else {
-                metedata_in_cache = false;
-            }
-        } else {
-            metedata_in_cache = false;
-        }
-    } else {
-        metedata_in_cache = false;
-    }
+    // // get chunk_handle, chunk_version, entry from cache.
+    // auto cache_chunk_handle_or =
+    //     cache_manager_->GetChunkHandle(filename, chunk_index);
+    // if (cache_chunk_handle_or.ok()) {
+    //     chunk_handle = cache_chunk_handle_or.value();
+    //     auto cache_chunk_version_or =
+    //         cache_manager_->GetChunkVersion(chunk_handle);
+    //     if (cache_chunk_version_or.ok()) {
+    //         chunk_version = cache_chunk_version_or.value();
+    //         auto cache_chunk_server_location_or =
+    //             cache_manager_->GetChunkServerLocationEntry(chunk_handle);
+    //         if (cache_chunk_server_location_or.ok()) {
+    //             LOG(INFO) << "file metadata in cache";
+    //             entry = cache_chunk_server_location_or.value();
+    //         } else {
+    //             metedata_in_cache = false;
+    //         }
+    //     } else {
+    //         metedata_in_cache = false;
+    //     }
+    // } else {
+    //     metedata_in_cache = false;
+    // }
+    metedata_in_cache = false;
 
     if (!metedata_in_cache) {
         LOG(INFO) << "talk to master metadata service";

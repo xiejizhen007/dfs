@@ -95,14 +95,15 @@ ChunkServerLocationFlatSet ChunkServerManager::AssignChunkServer(
     absl::ReaderMutexLock chunk_location_maps_lock_guard(
         &chunk_location_maps_lock_);
 
-    if (chunk_location_maps_.contains(chunk_handle)) {
+    if (chunk_location_maps_.contains(chunk_handle) &&
+        chunk_location_maps_[chunk_handle].size() > 0) {
         return chunk_location_maps_[chunk_handle];
     }
 
     ChunkServerLocationFlatSet assigned_locations;
     int assigned_nums = 0;
     // TODO: 选择磁盘剩余空间最多的块服务器
-    for (const auto& chunk_server: chunk_server_maps_) {
+    for (const auto& chunk_server : chunk_server_maps_) {
         const auto& location = chunk_server.first;
         if (assigned_nums >= (int)server_request_nums) {
             break;

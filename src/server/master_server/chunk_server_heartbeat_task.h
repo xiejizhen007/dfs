@@ -14,10 +14,13 @@ namespace server {
 
 class ChunkServerHeartBeatTask {
    public:
+    // 获取单例对象
     static ChunkServerHeartBeatTask* GetInstance();
 
+    // 启动心跳包任务
     void StartHeartBeatTask();
 
+    // 结束心跳包任务
     void StopHeartBeatTask();
 
    private:

@@ -112,6 +112,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     // get the filename, chunk_index
     const std::string& filename = request->filename();
     const uint32_t chunk_index = request->chunk_index();
+    LOG(INFO) << "Handle file write: " << filename
+              << " chunk idx: " << chunk_index;
 
     //
     if (!metadata_manager()->ExistFileMetadata(filename) &&
@@ -119,7 +121,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         LOG(ERROR) << "HandleFileChunkWrite: can't read file, no exist "
                    << filename;
         return grpc::Status(grpc::StatusCode::NOT_FOUND,
-                            "file does not exists ");
+                            "file does not exists");
     }
 
     auto chunk_handle_or =
@@ -147,11 +149,16 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     }
 
     if (!chunk_handle_or.ok()) {
-        LOG(ERROR) << "what happend";
+        LOG(ERROR) << "what happend, status: "
+                   << chunk_handle_or.status().ToString();
+        return dfs::common::StatusProtobuf2Grpc(
+            chunk_handle_or.status());
     }
 
     // get the chunk handle
     const auto& chunk_handle = chunk_handle_or.value();
+    LOG(INFO) << "wirte: try to get chunk handle " << chunk_handle
+              << " metadata";
     auto file_chunk_metadata_or =
         metadata_manager()->GetFileChunkMetadata(chunk_handle);
     if (!file_chunk_metadata_or.ok()) {
@@ -165,6 +172,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     protos::FileChunkMetadata respondMetadata = file_chunk_metadata_or.value();
     auto chunk_version = respondMetadata.version();
     auto new_chunk_version = chunk_version + 1;
+    LOG(INFO) << "respond metadata chunk_handle: "
+              << respondMetadata.chunk_handle();
 
     // TODO: set up chunk server
     for (const auto& location :
@@ -172,6 +181,9 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         const std::string server_address =
             location.server_hostname() + ":" +
             std::to_string(location.server_port());
+
+        LOG(INFO) << "store chunk_handle " << chunk_handle
+                  << " in server_address";
 
         // auto client = GetChunkServerFileServiceClient(server_address);
     }
@@ -200,7 +212,11 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
         return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
     } else {
         LOG(INFO) << "chunk handle created: " << chunk_handle_or.value()
-                  << " for file " << filename;
+                  << " for file " << filename << " idx: " << chunk_index;
+        auto file_metadata_or = metadata_manager()->GetFileMetadata(filename);
+        LOG(INFO) << "file metadata contains idx: " << chunk_index << "? "
+                  << file_metadata_or.value()->chunk_handles().contains(
+                         chunk_index);
     }
 
     // get chunk_handle
@@ -234,6 +250,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
         if (!init_chunk_or.ok()) {
             LOG(ERROR) << "failed init request";
             return StatusProtobuf2Grpc(init_chunk_or.status());
+        } else {
+            LOG(INFO) << "InitFileChunkRequest is ok";
         }
 
         // ok
@@ -242,8 +260,17 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
 
     if (respond->metadata().locations().empty()) {
         LOG(ERROR) << "no chunk server to chunk handle: " << chunk_handle;
+        // 没有块服务器存储该数据块，删掉数据块
         return grpc::Status(grpc::StatusCode::UNAVAILABLE,
                             "no chunk server is available");
+    }
+
+
+    auto get_chunk_handle_or = metadata_manager()->GetChunkHandle(filename, chunk_index);
+    if (!get_chunk_handle_or.ok()) {
+        LOG(ERROR) << "can not get chunk handle after create chunk";
+    } else {
+        LOG(INFO) << "create chunk is ok";
     }
 
     return grpc::Status::OK;

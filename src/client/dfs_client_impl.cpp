@@ -392,7 +392,7 @@ google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
 
         auto respond_or = master_metadata_service_client_->SendRequest(request);
         if (!respond_or.ok()) {
-            LOG(INFO) << "can not get respond when send request to master";
+            LOG(INFO) << "get file chunk metadata is not ok";
             return respond_or.status();
         }
 

@@ -34,21 +34,28 @@ using ChunkServerLocationFlatSet =
 
 class ChunkServerManager {
    public:
+   // 获取单例对象
     static ChunkServerManager* GetInstance();
 
+    // 注册块服务器
     bool RegisterChunkServer(std::shared_ptr<protos::ChunkServer> chunk_server);
 
+    // 注销块服务器
     bool UnRegisterChunkServer(const protos::ChunkServerLocation& location);
 
+    // 根据服务器地址获取块服务器
     std::shared_ptr<protos::ChunkServer> GetChunkServer(
         const protos::ChunkServerLocation& location);
 
+    // 获取存储块句柄的块服务器地址集合
     ChunkServerLocationFlatSet GetChunkLocation(
         const std::string& chunk_handle);
 
+    // 分配一定数量的块服务器用于存储块句柄
     ChunkServerLocationFlatSet AssignChunkServer(
         const std::string& chunk_handle, const uint32_t& server_request_nums);
 
+    // 更新块服务器信息
     void UpdateChunkServer(
         const protos::ChunkServerLocation& location,
         const uint32_t& available_disk_mb,

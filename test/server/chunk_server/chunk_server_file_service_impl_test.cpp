@@ -56,6 +56,7 @@ ReadFileChunkRequest MakeVaildReadFileChunkRequest() {
     request.set_version(test_chunk_version);
     request.set_offset(0);
     request.set_length(test_data.length());
+    return request;
 }
 
 class ChunkServerFileServiceImplTest : public ::testing::Test {
@@ -93,34 +94,6 @@ TEST_F(ChunkServerFileServiceImplTest, InitFileChunkTest) {
               protos::grpc::InitFileChunkRespond::ALREADY_EXISTS);
 }
 
-// TEST_F(ChunkServerFileServiceImplTest, ReadWriteTest) {
-//     ReadFileChunkRequest read_request;
-//     read_request.set_chunk_handle(test_chunk_handle);
-//     read_request.set_version(test_chunk_version);
-//     read_request.set_offset(0);
-//     read_request.set_length(test_data.size());
-//     auto read_respond_or =
-//         chunk_server_file_service_client_->SendRequest(read_request);
-//     EXPECT_TRUE(read_respond_or.ok());
-//     auto read_data = read_respond_or.value().data();
-//     EXPECT_TRUE(read_data == "" || read_data == test_data);
-//     std::cout << "read data: " << read_data << std::endl;
-
-//     WriteFileChunkRequest write_request;
-//     WriteFileChunkRequestHeader write_header;
-//     write_header.set_chunk_handle(test_chunk_handle);
-//     write_header.set_version(test_chunk_version);
-//     write_header.set_offset(0);
-//     write_header.set_length(test_data.size());
-//     write_header.set_data(test_data);
-//     *write_request.mutable_header() = write_header;
-//     auto write_respond_or =
-//         chunk_server_file_service_client_->SendRequest(write_request);
-//     EXPECT_TRUE(write_respond_or.ok());
-//     EXPECT_TRUE(write_respond_or.value().status() ==
-//                 protos::grpc::FileChunkMutationStatus::OK);
-// }
-
 // 一次正确的读操作
 TEST_F(ChunkServerFileServiceImplTest, ReadChunkTest) {
     auto request = MakeVaildReadFileChunkRequest();
@@ -130,6 +103,107 @@ TEST_F(ChunkServerFileServiceImplTest, ReadChunkTest) {
     EXPECT_EQ(status_or.value().read_length(), test_data.size());
     EXPECT_EQ(status_or.value().data(), test_data);
 }
+
+// 读取部分数据
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkPartTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    uint32_t read_length = 5;
+    request.set_length(read_length);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OK);
+    EXPECT_EQ(status_or.value().read_length(), read_length);
+    EXPECT_EQ(status_or.value().data(), test_data.substr(0, read_length));
+}
+
+// 读取过量数据，超出数据块范围
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkBigLengthTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    uint32_t read_length = test_data.size() + 5;
+    request.set_length(read_length);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OK);
+    EXPECT_EQ(status_or.value().read_length(), test_data.size());
+    EXPECT_EQ(status_or.value().data(), test_data);
+}
+
+// 读取经过偏移的数据
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkOffsetTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    uint32_t offset = 5;
+    uint32_t read_length = test_data.size() - offset;
+    request.set_offset(offset);
+    request.set_length(read_length);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OK);
+    EXPECT_EQ(status_or.value().read_length(), read_length);
+    EXPECT_EQ(status_or.value().data(), test_data.substr(offset, read_length));
+}
+
+// 读取经过偏移的数据
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkOffsetPartTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    uint32_t offset = 5;
+    uint32_t read_length = 5;
+    request.set_offset(offset);
+    request.set_length(read_length);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OK);
+    EXPECT_EQ(status_or.value().read_length(), read_length);
+    EXPECT_EQ(status_or.value().data(), test_data.substr(offset, read_length));
+}
+
+// 读取经过偏移的过量数据
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkOffsetBigLengthTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    uint32_t offset = 5;
+    request.set_offset(offset);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OK);
+    EXPECT_EQ(status_or.value().read_length(), test_data.size() - offset);
+    EXPECT_EQ(status_or.value().data(), test_data.substr(offset));
+}
+
+// 读取范围之外的数据
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkOutOfRangeTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    request.set_offset(test_data.size() + 1);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::OUT_OF_RANGE);
+}
+
+// 读取不存在的数据块
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkNotFoundTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    request.set_chunk_handle("chunk_not_exist");
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::NOT_FOUND);
+}
+
+// 读取错误版本的数据块
+TEST_F(ChunkServerFileServiceImplTest, ReadChunkBadVersionTest) {
+    auto request = MakeVaildReadFileChunkRequest();
+    request.set_version(test_chunk_version + 10);
+
+    auto status_or = chunk_server_file_service_client_->SendRequest(request);
+    EXPECT_TRUE(status_or.ok());
+    EXPECT_EQ(status_or.value().status(), ReadFileChunkRespond::VERSION_ERROR);
+}
+
+
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

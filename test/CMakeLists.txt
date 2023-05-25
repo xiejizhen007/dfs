@@ -60,6 +60,25 @@ target_link_libraries(lock_manager_test
     protos_shared
 )
 
+add_executable(master_metadata_service_impl_test
+    server/master_server/master_metadata_service_impl_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_cache_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_file_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/chunk_server_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/master_metadata_service_impl.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
+)
+
+target_link_libraries(master_metadata_service_impl_test
+    ${GTEST_BOTH_LIBRARIES}
+    grpc_client_shared
+    leveldb
+    protos_shared
+)
+
 add_executable(metadata_manager_test
     server/master_server/metadata_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp

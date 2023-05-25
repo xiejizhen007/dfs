@@ -20,10 +20,13 @@ class ChunkServerImpl {
     bool Initialize(const std::string& server_name,
                     dfs::common::ConfigManager* config_manager);
 
+    // 向主服务器汇报信息，并处理已删除的数据块
     bool ReportToMaster();
 
+    // 创建后台线程用于定期向主服务器汇报信息
     void StartReportToMaster();
 
+    // 停止汇报操作，通常是因为块服务器程序退出
     void StopReportToMaster();
 
     void RegisterMasterServerClient(const std::string& server_address);

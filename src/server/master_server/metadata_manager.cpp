@@ -148,7 +148,7 @@ google::protobuf::util::StatusOr<std::string> MetadataManager::GetChunkHandle(
     const auto& chunk_handles = file_metadata->chunk_handles();
     if (!chunk_handles.contains(chunk_index)) {
         return google::protobuf::util::NotFoundError(
-            "file " + filename + " not found chunk " +
+            "file " + filename + " not found chunk index " +
             std::to_string(chunk_index));
     }
 

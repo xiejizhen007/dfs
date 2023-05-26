@@ -23,6 +23,17 @@ namespace server {
 
 using protos::ChunkServerLocation;
 
+std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
+    const ChunkServerLocationFlatSet& location_set) {
+    std::vector<ChunkServerLocation> locations;
+
+    for (const ChunkServerLocation& location : location_set) {
+        locations.emplace_back(location);
+    }
+
+    return locations;
+}
+
 ChunkServerManager* ChunkServerManager::GetInstance() {
     static ChunkServerManager* instance = new ChunkServerManager();
     return instance;

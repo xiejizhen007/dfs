@@ -45,6 +45,8 @@ class ChunkServerImpl {
     std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
     GetOrCreateChunkServerFileServerClient(const std::string& server_address);
 
+    std::string GetChunkServerLocation() const;
+
    private:
     ChunkServerImpl() = default;
 

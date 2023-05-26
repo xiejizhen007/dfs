@@ -61,7 +61,7 @@ int main(int argc, char* argv[]) {
             LOG(INFO) << "upload status: " << status.ToString();
         } else if (token[0] == "set" && token.size() == 3) {
             auto status = set(token[1], std::string(std::stoi(token[2]), '0'));
-            LOG(INFO) << "upload status: " << status.ToString();
+            LOG(INFO) << "set status: " << status.ToString();
         } else if (token[0] == "quit") {
             LOG(INFO) << "Quit....";
             break;

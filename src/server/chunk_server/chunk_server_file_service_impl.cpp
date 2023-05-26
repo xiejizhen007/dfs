@@ -23,6 +23,10 @@ FileChunkManager* ChunkServerFileServiceImpl::file_chunk_manager() {
     return FileChunkManager::GetInstance();
 }
 
+ChunkServerImpl* ChunkServerFileServiceImpl::chunk_server_impl() {
+    return ChunkServerImpl::GetInstance();
+}
+
 grpc::Status ChunkServerFileServiceImpl::InitFileChunk(
     grpc::ServerContext* context,
     const protos::grpc::InitFileChunkRequest* request,
@@ -130,15 +134,30 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
         return status;
     }
 
+    auto curr_location = chunk_server_impl()->GetChunkServerLocation();
+    LOG(INFO) << "this is primary chunk server, curr_location is "
+              << curr_location;
+
     // write successful
     // TODO: apply changes to other chunk server
     for (auto location : request->locations()) {
         const std::string server_address =
             location.server_hostname() + ":" +
             std::to_string(location.server_port());
+
+        // 将更改写到其他的块服务器，避免主副本服务器再次进行写入
+        if (server_address == curr_location) {
+            continue;
+        }
+
+        LOG(INFO) << "primary server try to apply mutation to chunk server: "
+                  << server_address;
+
+        // 与其他块服务器进行通信
         auto client =
-            ChunkServerImpl::GetInstance()
-                ->GetOrCreateChunkServerFileServerClient(server_address);
+            chunk_server_impl()->GetOrCreateChunkServerFileServerClient(
+                server_address);
+
         if (!client) {
             LOG(ERROR)
                 << "can not get or create file service client, server_address: "

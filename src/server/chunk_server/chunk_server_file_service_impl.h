@@ -3,6 +3,7 @@
 
 #include "chunk_server_file_service.grpc.pb.h"
 #include "src/server/chunk_server/file_chunk_manager.h"
+#include "src/server/chunk_server/chunk_server_impl.h"
 
 namespace dfs {
 namespace server {
@@ -48,6 +49,8 @@ class ChunkServerFileServiceImpl final
 
    private:
     FileChunkManager* file_chunk_manager();
+
+    ChunkServerImpl* chunk_server_impl();
 
     grpc::Status WriteFileChunkLocally(
         const protos::grpc::WriteFileChunkRequestHeader& header,

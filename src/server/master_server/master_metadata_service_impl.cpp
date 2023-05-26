@@ -144,15 +144,14 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         LOG(INFO) << "Successfully create file chunk.";
 
         // 刷新 chunk handle
-        auto chunk_handle_or =
+        chunk_handle_or =
             metadata_manager()->GetChunkHandle(filename, chunk_index);
     }
 
     if (!chunk_handle_or.ok()) {
         LOG(ERROR) << "what happend, status: "
                    << chunk_handle_or.status().ToString();
-        return dfs::common::StatusProtobuf2Grpc(
-            chunk_handle_or.status());
+        return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
     }
 
     // get the chunk handle
@@ -188,6 +187,16 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         // auto client = GetChunkServerFileServiceClient(server_address);
     }
 
+    respond->mutable_metadata()->set_chunk_handle(
+        respondMetadata.chunk_handle());
+    respond->mutable_metadata()->set_version(respondMetadata.version());
+    *respond->mutable_metadata()->mutable_primary_location() =
+        respondMetadata.primary_location();
+    for (auto location :
+         chunk_server_manager()->GetChunkLocation(chunk_handle)) {
+        *respond->mutable_metadata()->add_locations() = location;
+    }
+
     return grpc::Status::OK;
 }
 
@@ -196,6 +205,9 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
     protos::grpc::OpenFileRespond* respond) {
     const auto filename = request->filename();
     const auto chunk_index = request->chunk_index();
+
+    LOG(INFO) << "HandleFileChunkCreation will create a chunk for " << filename
+              << " idx: " << chunk_index;
 
     if (!metadata_manager()->ExistFileMetadata(filename)) {
         LOG(ERROR) << "File metadata is not found, " << filename;
@@ -223,20 +235,39 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
     const auto& chunk_handle = chunk_handle_or.value();
 
     // TODO: assign chunk servers to store this chunk
-    auto chunk_server_locations =
-        chunk_server_manager()->AssignChunkServer(chunk_handle, 1);
-    LOG(INFO) << "assign " << chunk_server_locations.size() << " chunk server";
+    auto chunk_server_locations = ChunkServerLocationFlatSetToVector(
+        chunk_server_manager()->AssignChunkServer(chunk_handle, 3));
+
+    LOG(INFO) << "assign " << chunk_server_locations.size()
+              << " chunk server to store chunk handle " << chunk_handle;
+    // 当前无可用的块服务器了
+    if (chunk_server_locations.empty()) {
+        LOG(ERROR) << "no chunk server to store chunk handle: " << chunk_handle;
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE,
+                            "no chunk server is available");
+    }
+
+    for (auto location : chunk_server_locations) {
+        LOG(INFO) << "debug location: " << location.DebugString();
+    }
+
     protos::FileChunkMetadata chunk_metadata;
     chunk_metadata.set_chunk_handle(chunk_handle);
     chunk_metadata.set_version(1);
+    // 选取当前磁盘剩余空间最多的块服务器作为主副本服务器
+    // 只有当前的主副本服务器出现故障时，才会更换主副本服务器
+    *chunk_metadata.mutable_primary_location() = chunk_server_locations[0];
     metadata_manager()->SetFileChunkMetadata(chunk_metadata);
 
     respond->mutable_metadata()->set_chunk_handle(chunk_handle);
     respond->mutable_metadata()->set_version(1);
+    *respond->mutable_metadata()->mutable_primary_location() =
+        chunk_server_locations[0];
 
     // TODO: talk to chunk server
     for (const auto& location :
          chunk_server_manager()->GetChunkLocation(chunk_handle)) {
+        // 设置好块服务器地址
         const std::string server_address =
             location.server_hostname() + ":" +
             std::to_string(location.server_port());
@@ -265,12 +296,13 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
                             "no chunk server is available");
     }
 
-
-    auto get_chunk_handle_or = metadata_manager()->GetChunkHandle(filename, chunk_index);
+    auto get_chunk_handle_or =
+        metadata_manager()->GetChunkHandle(filename, chunk_index);
     if (!get_chunk_handle_or.ok()) {
         LOG(ERROR) << "can not get chunk handle after create chunk";
     } else {
-        LOG(INFO) << "create chunk is ok";
+        LOG(INFO) << "create chunk is ok, filename: " << filename
+                  << " idx: " << chunk_index;
     }
 
     return grpc::Status::OK;

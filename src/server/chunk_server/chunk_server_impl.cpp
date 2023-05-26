@@ -147,5 +147,9 @@ ChunkServerImpl::GetOrCreateChunkServerFileServerClient(
     return chunk_server_file_server_clients_[server_address];
 }
 
+std::string ChunkServerImpl::GetChunkServerLocation() const {
+    return server_address_ + ":" + std::to_string(server_port_);
+}
+
 }  // namespace server
 }  // namespace dfs

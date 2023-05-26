@@ -6,6 +6,7 @@
 #include <absl/synchronization/mutex.h>
 
 #include <memory>
+#include <vector>
 
 #include "chunk_server.pb.h"
 
@@ -32,9 +33,13 @@ class ChunkServerLocationHash {
 using ChunkServerLocationFlatSet =
     absl::flat_hash_set<protos::ChunkServerLocation, ChunkServerLocationHash>;
 
+// 辅助函数，将 set 转化为 vector
+std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
+    const ChunkServerLocationFlatSet& location_set);
+
 class ChunkServerManager {
    public:
-   // 获取单例对象
+    // 获取单例对象
     static ChunkServerManager* GetInstance();
 
     // 注册块服务器

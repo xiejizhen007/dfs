@@ -72,6 +72,7 @@ DfsClientImpl::ReadFile(const std::string& filename, size_t offset,
     // 在 chunk 的起始位置
     size_t chunk_start_offset = offset % chunk_size;
 
+    // TODO: 当读取文件过大时，会导致程序崩溃
     void* buffer = malloc(nbytes);
     if (!buffer) {
         return UnknownError("malloc failed");
@@ -264,36 +265,44 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     // TODO:
     // 将数据写入到主副本块服务器，让主副本块服务器在将更新推送到其他副本的块服务器
 
-    // 将数据写入到所有的块服务器
-    // std::vector<std::thread> write_threads;
-    WriteFileChunkRespond respond;
-    for (const auto& location : entry.locations) {
-        std::string server_address = location.server_hostname() + ":" +
-                                     std::to_string(location.server_port());
-        // 设置写入请求
-        WriteFileChunkRequest write_request;
-        write_request.mutable_header()->set_chunk_handle(chunk_handle);
-        write_request.mutable_header()->set_version(chunk_version);
-        write_request.mutable_header()->set_offset(offset);
-        write_request.mutable_header()->set_length(nbytes);
-        write_request.mutable_header()->set_checksum(checksum);
+    WriteFileChunkRequest write_request;
+    write_request.mutable_header()->set_chunk_handle(chunk_handle);
+    write_request.mutable_header()->set_version(chunk_version);
+    write_request.mutable_header()->set_offset(offset);
+    write_request.mutable_header()->set_length(nbytes);
+    write_request.mutable_header()->set_checksum(checksum);
 
-        // 获取 grpc 客户端
-        auto chunk_server_file_service_client =
-            GetChunkServerFileServiceClient(server_address);
-        auto respond_or =
-            chunk_server_file_service_client->SendRequest(write_request);
-        if (!respond_or.ok()) {
-            LOG(ERROR) << "write file chunk respond is not ok, status: "
-                       << respond_or.status().ToString();
-        }
-
-        // TODO:
-        // 将写入请求发送给主副本块服务器，由主块服务器应用更改到其他副本服务器
-        respond = respond_or.value();
+    // 将块服务器地址写入请求中
+    for (auto location: entry.locations) {
+        write_request.mutable_locations()->Add(std::move(location));
     }
 
-    return respond;
+    std::string primary_server_address =
+        entry.primary_location.server_hostname() + ":" +
+        std::to_string(entry.primary_location.server_port());
+
+    LOG(INFO) << "try to get primary_server_address: "
+              << primary_server_address;
+
+    // 获取 grpc 客户端
+    auto chunk_server_file_service_client =
+        GetChunkServerFileServiceClient(primary_server_address);
+
+    if (!chunk_server_file_service_client) {
+        LOG(ERROR) << "can not get primary chunk server client, ip:port is "
+                   << primary_server_address;
+        return UnknownError("can not talk to primary chunk server");
+    }
+
+    auto respond_or =
+        chunk_server_file_service_client->SendRequest(write_request);
+    if (!respond_or.ok()) {
+        LOG(ERROR) << "write file chunk respond is not ok, status: "
+                   << respond_or.status().ToString();
+        return respond_or.status();
+    }
+
+    return respond_or.value();
 }
 
 std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
@@ -342,6 +351,9 @@ void DfsClientImpl::CacheToCacheManager(
     } else {
         // add log
     }
+
+    LOG(INFO) << "metadata from master, primary location: "
+              << respond.metadata().primary_location().DebugString();
 
     CacheManager::ChunkServerLocationEntry entry;
     entry.primary_location = respond.metadata().primary_location();

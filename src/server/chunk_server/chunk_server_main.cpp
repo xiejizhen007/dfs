@@ -20,6 +20,7 @@ int main(int argc, char* argv[]) {
     dfs::common::SystemLogger::GetInstance().Initialize(argv[0]);
 
     if (argc != 2) {
+        LOG(ERROR) << "parameter error, try like this: command chunk_server0";
         return -1;
     }
 

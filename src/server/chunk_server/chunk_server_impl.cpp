@@ -61,7 +61,7 @@ bool ChunkServerImpl::ReportToMaster() {
         }
     } else {
         // handle error
-        LOG(ERROR) << "master server client not responding";
+        LOG(ERROR) << "master server client not responding " << respond.status();
         return false;
     }
 

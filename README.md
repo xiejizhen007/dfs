@@ -13,3 +13,11 @@
 - client_cache_manager，当 client 进行文件操作时，会向 master 请求 metadata，将请求来的 metadata 缓存起来，这样就不需要每次文件操作都向 master 获取 metadata。
 - grpc_client，rpc 服务的客户端。
 - chunk_cache_manager，chunkserver 用于缓存数据，当 client 写入数据时，先将数据写入到 cache，然后根据 cache 数据与写入数据是否相同，来决定写入到 chunkserver。
+
+## commit message
+
+添加了主服务器对块服务器的心跳包检测，在块服务器宕机时，将其从系统中注销掉。
+
+如果说块服务器上存储的块将该块服务器作为主副本服务器，那么在注销块服务器之后，为数据块分配新的主副本服务器。
+
+这样，元数据中的主副本服务器只有在数据块创建时，或者主副本服务器宕机时进行设置。

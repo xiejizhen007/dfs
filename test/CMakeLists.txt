@@ -93,6 +93,8 @@ target_link_libraries(metadata_manager_test
 add_executable(chunk_server_manager_test
     server/master_server/chunk_server_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
 )
 
 target_link_libraries(chunk_server_manager_test

@@ -1,6 +1,7 @@
 #include "src/server/master_server/chunk_server_manager.h"
 
 #include "src/common/system_logger.h"
+#include "src/server/master_server/metadata_manager.h"
 
 namespace protos {
 bool operator==(const ChunkServerLocation& l, const ChunkServerLocation& r) {
@@ -79,6 +80,11 @@ bool ChunkServerManager::UnRegisterChunkServer(
     for (int i = 0; i < chunk_server->stored_chunk_handles_size(); i++) {
         chunk_location_maps_[chunk_server->stored_chunk_handles()[i]].erase(
             chunk_server->location());
+
+        // TODO: get a new primary server
+        // 如果说被删除的服务器是主副本块服务器，需要寻找新的块服务器作为主副本块服务器
+        UpdateFileChunkMetadataLocation(chunk_server->stored_chunk_handles()[i],
+                                        chunk_server->location());
     }
 
     return true;
@@ -98,6 +104,11 @@ ChunkServerLocationFlatSet ChunkServerManager::GetChunkLocation(
     const std::string& chunk_handle) {
     absl::ReaderMutexLock chunk_location_maps_lock_guard(
         &chunk_location_maps_lock_);
+    return chunk_location_maps_[chunk_handle];
+}
+
+ChunkServerLocationFlatSet ChunkServerManager::GetChunkLocationNoLock(
+    const std::string& chunk_handle) {
     return chunk_location_maps_[chunk_handle];
 }
 
@@ -164,6 +175,45 @@ void ChunkServerManager::UpdateChunkServer(
     }
 
     chunk_server->set_available_disk_mb(available_disk_mb);
+}
+
+void ChunkServerManager::UpdateFileChunkMetadataLocation(
+    const std::string& chunk_handle,
+    const protos::ChunkServerLocation& location) {
+    auto metadata_or =
+        MetadataManager::GetInstance()->GetFileChunkMetadata(chunk_handle);
+    if (!metadata_or.ok()) {
+        LOG(ERROR) << "UpdateFileChunkMetadataLocation: get chunk handle "
+                   << chunk_handle << " metadata failed, because "
+                   << metadata_or.status();
+        return;
+    }
+
+    auto metadata = metadata_or.value();
+    if (metadata.primary_location() == location) {
+        LOG(WARNING)
+            << "UpdateFileChunkMetadataLocation: warning, chunk handle "
+            << chunk_handle
+            << " primary server is unregisted, need to get new primary server";
+
+        // 分配一个新的块服务器作为主副本服务器
+        auto locations = GetChunkLocationNoLock(chunk_handle);
+        if (locations.empty()) {
+            LOG(ERROR) << "wtf? no chunk server store chunk handle "
+                       << chunk_handle;
+            return;
+        }
+
+        for (const auto& primary_location : locations) {
+            *metadata.mutable_primary_location() = primary_location;
+            LOG(INFO) << "chunk handle " << chunk_handle
+                      << " set new primary location, "
+                      << primary_location.DebugString();
+            break;
+        }
+
+        MetadataManager::GetInstance()->SetFileChunkMetadata(metadata);
+    }
 }
 
 }  // namespace server

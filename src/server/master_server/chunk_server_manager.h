@@ -38,6 +38,9 @@ std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
     const ChunkServerLocationFlatSet& location_set);
 
 class ChunkServerManager {
+    // 声明友元类，以便访问私有变量
+    friend class ChunkServerHeartBeatTask;
+
    public:
     // 获取单例对象
     static ChunkServerManager* GetInstance();
@@ -56,6 +59,10 @@ class ChunkServerManager {
     ChunkServerLocationFlatSet GetChunkLocation(
         const std::string& chunk_handle);
 
+    // 获取存储块句柄的块服务器地址集合
+    ChunkServerLocationFlatSet GetChunkLocationNoLock(
+        const std::string& chunk_handle);
+
     // 分配一定数量的块服务器用于存储块句柄
     ChunkServerLocationFlatSet AssignChunkServer(
         const std::string& chunk_handle, const uint32_t& server_request_nums);
@@ -69,6 +76,11 @@ class ChunkServerManager {
 
    private:
     ChunkServerManager() = default;
+
+    // 更新数据块元数据的主副本服务器位置信息
+    void UpdateFileChunkMetadataLocation(
+        const std::string& chunk_handle,
+        const protos::ChunkServerLocation& location);
 
     // map location to server
     absl::flat_hash_map<protos::ChunkServerLocation,

@@ -1,4 +1,5 @@
 #include "src/common/system_logger.h"
+#include "src/server/master_server/chunk_server_heartbeat_task.h"
 #include "src/server/master_server/chunk_server_manager_service_impl.h"
 #include "src/server/master_server/master_metadata_service_impl.h"
 
@@ -12,7 +13,7 @@ int main(int argc, char* argv[]) {
     std::string server_address("0.0.0.0:50050");
     builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
 
-    //set up service
+    // set up service
     ChunkServerManagerServiceImpl chunk_server_manager_service;
     builder.RegisterService(&chunk_server_manager_service);
 
@@ -23,6 +24,9 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<grpc::Server> server(builder.BuildAndStart());
 
     LOG(INFO) << "master server listening on " << server_address;
+
+    // start heart beat task
+    ChunkServerHeartBeatTask::GetInstance()->StartHeartBeatTask();
 
     server->Wait();
 

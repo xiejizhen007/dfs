@@ -11,11 +11,17 @@ namespace server {
 
 using dfs::common::ConfigManager;
 using dfs::common::StatusProtobuf2Grpc;
+using google::protobuf::util::IsAlreadyExists;
 using google::protobuf::util::IsNotFound;
+using protos::FileChunk;
 using protos::grpc::AdjustFileChunkVersionRespond;
+using protos::grpc::ApplyChunkReplicaCopyRequest;
+using protos::grpc::ApplyChunkReplicaCopyRespond;
 using protos::grpc::ApplyMutationRequest;
 using protos::grpc::ApplyMutationRespond;
 using protos::grpc::FileChunkMutationStatus;
+using protos::grpc::InitFileChunkRequest;
+using protos::grpc::InitFileChunkRespond;
 using protos::grpc::SendChunkDataRespond;
 using protos::grpc::WriteFileChunkRespond;
 
@@ -137,6 +143,8 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
     auto curr_location = chunk_server_impl()->GetChunkServerLocation();
     LOG(INFO) << "this is primary chunk server, curr_location is "
               << curr_location;
+
+    LOG(INFO) << "replica server size: " << request->locations_size();
 
     // write successful
     // TODO: apply changes to other chunk server
@@ -304,6 +312,85 @@ grpc::Status ChunkServerFileServiceImpl::AdjustFileChunkVersion(
         LOG(ERROR) << "Unknow error in AdjustFileChunkVersion, status: "
                    << update_version.ToString();
         return StatusProtobuf2Grpc(update_version);
+    }
+}
+
+grpc::Status ChunkServerFileServiceImpl::ChunkReplicaCopy(
+    grpc::ServerContext* context,
+    const protos::grpc::ChunkReplicaCopyRequest* request,
+    protos::grpc::ChunkReplicaCopyRespond* respond) {
+    const std::string chunk_handle = request->chunk_handle();
+
+    auto chunk_or = file_chunk_manager()->GetFileChunk(chunk_handle);
+    if (!chunk_or.ok()) {
+        return StatusProtobuf2Grpc(chunk_or.status());
+    }
+
+    const FileChunk chunk = *(chunk_or.value());
+
+    // 创建数据块
+    for (const auto& location : request->locations()) {
+        // 获取服务器地址
+        const std::string server_address =
+            location.server_hostname() + ":" +
+            std::to_string(location.server_port());
+
+        // 与其他块服务器进行通信
+        auto client =
+            chunk_server_impl()->GetOrCreateChunkServerFileServerClient(
+                server_address);
+
+        if (!client) {
+            LOG(ERROR) << "can not get or create file service client, "
+                       << "server_address : " << server_address;
+            continue;
+        }
+
+        ApplyChunkReplicaCopyRequest apply_req;
+        apply_req.set_chunk_handle(chunk_handle);
+        apply_req.mutable_chunk()->set_data(chunk.data());
+        apply_req.mutable_chunk()->set_version(chunk.version());
+        auto apply_status = client->SendRequest(apply_req);
+        if (apply_status.ok()) {
+            LOG(INFO) << "successfully apply chunk replica copy to server "
+                      << server_address;
+        } else {
+            LOG(ERROR) << "apply chunk replica copy to server "
+                       << server_address << " failed, because "
+                       << apply_status.status().ToString();
+        }
+    }
+
+    return grpc::Status::OK;
+}
+
+grpc::Status ChunkServerFileServiceImpl::ApplyChunkReplicaCopy(
+    grpc::ServerContext* context,
+    const protos::grpc::ApplyChunkReplicaCopyRequest* request,
+    protos::grpc::ApplyChunkReplicaCopyRespond* respond) {
+    const std::string chunk_handle = request->chunk_handle();
+    const FileChunk chunk = request->chunk();
+
+    // 首先先创建数据块
+    auto create_status =
+        file_chunk_manager()->CreateChunk(chunk_handle, chunk.version());
+    if (create_status.ok() || IsAlreadyExists(create_status)) {
+        LOG(INFO) << "create a chunk for " << chunk_handle << " is ok";
+        // 写入数据块
+        auto write_status =
+            file_chunk_manager()->WriteFileChunk(chunk_handle, chunk);
+        if (write_status.ok()) {
+            LOG(INFO) << "ApplyChunkReplicaCopy ok";
+            return grpc::Status::OK;
+        } else {
+            return grpc::Status(grpc::StatusCode::UNKNOWN,
+                                "leveldb have something wrong, status: " +
+                                    write_status.ToString());
+        }
+
+    } else {
+        LOG(ERROR) << "no chunk_handle " << chunk_handle << " chunk";
+        return StatusProtobuf2Grpc(create_status);
     }
 }
 

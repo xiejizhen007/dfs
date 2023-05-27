@@ -47,6 +47,18 @@ class ChunkServerFileServiceImpl final
         const protos::grpc::AdjustFileChunkVersionRequest* request,
         protos::grpc::AdjustFileChunkVersionRespond* respond) override;
 
+    // 主服务器调用，向主副本服务器发起数据块复制的请求
+    grpc::Status ChunkReplicaCopy(
+        grpc::ServerContext* context,
+        const protos::grpc::ChunkReplicaCopyRequest* request,
+        protos::grpc::ChunkReplicaCopyRespond* respond) override;
+
+    // 主副本服务器调用，将数据块副本复制到其他的服务器上
+    grpc::Status ApplyChunkReplicaCopy(
+        grpc::ServerContext* context,
+        const protos::grpc::ApplyChunkReplicaCopyRequest* request,
+        protos::grpc::ApplyChunkReplicaCopyRespond* respond) override;
+
    private:
     FileChunkManager* file_chunk_manager();
 

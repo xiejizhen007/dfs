@@ -1,6 +1,7 @@
 #include "src/server/master_server/chunk_server_manager.h"
 
 #include "src/common/system_logger.h"
+#include "src/server/master_server/chunk_replica_manager.h"
 #include "src/server/master_server/metadata_manager.h"
 
 namespace protos {
@@ -22,6 +23,7 @@ bool operator<(const ChunkServer& l, const ChunkServer& r) {
 namespace dfs {
 namespace server {
 
+using dfs::grpc_client::ChunkServerFileServiceClient;
 using protos::ChunkServerLocation;
 
 std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
@@ -85,6 +87,10 @@ bool ChunkServerManager::UnRegisterChunkServer(
         // 如果说被删除的服务器是主副本块服务器，需要寻找新的块服务器作为主副本块服务器
         UpdateFileChunkMetadataLocation(chunk_server->stored_chunk_handles()[i],
                                         chunk_server->location());
+
+        // 复制副本
+        ChunkReplicaManager::GetInstance()->AddChunkReplicaTask(
+            chunk_server->stored_chunk_handles()[i]);
     }
 
     return true;
@@ -105,6 +111,13 @@ ChunkServerLocationFlatSet ChunkServerManager::GetChunkLocation(
     absl::ReaderMutexLock chunk_location_maps_lock_guard(
         &chunk_location_maps_lock_);
     return chunk_location_maps_[chunk_handle];
+}
+
+size_t ChunkServerManager::GetChunkLocationSize(
+    const std::string& chunk_handle) {
+    absl::ReaderMutexLock chunk_location_maps_lock_guard(
+        &chunk_location_maps_lock_);
+    return chunk_location_maps_[chunk_handle].size();
 }
 
 ChunkServerLocationFlatSet ChunkServerManager::GetChunkLocationNoLock(
@@ -134,6 +147,39 @@ ChunkServerLocationFlatSet ChunkServerManager::AssignChunkServer(
         assigned_locations.insert(location);
         chunk_location_maps_[chunk_handle].insert(location);
         assigned_nums++;
+    }
+
+    return assigned_locations;
+}
+
+ChunkServerLocationFlatSet ChunkServerManager::AssignChunkServerToCopyReplica(
+    const std::string& chunk_handle, const uint32_t& healthy_replica_nums) {
+    absl::ReaderMutexLock chunk_location_maps_lock_guard(
+        &chunk_location_maps_lock_);
+    ChunkServerLocationFlatSet assigned_locations;
+
+    if (!chunk_location_maps_.contains(chunk_handle)) {
+        LOG(ERROR) << "no chunk replica to copy";
+        return assigned_locations;
+    }
+
+    if (chunk_location_maps_[chunk_handle].size() >= healthy_replica_nums) {
+        LOG(INFO) << "have " << chunk_location_maps_[chunk_handle].size()
+                  << " in server, no need copy";
+        return assigned_locations;
+    }
+
+    int replica_num = chunk_location_maps_[chunk_handle].size();
+    // TODO: 优先选择磁盘容量充足的块服务器
+    for (const auto& location_pair : chunk_server_maps_) {
+        if (replica_num >= healthy_replica_nums) {
+            break;
+        }
+
+        if (!chunk_location_maps_[chunk_handle].contains(location_pair.first)) {
+            assigned_locations.insert(location_pair.first);
+            replica_num++;
+        }
     }
 
     return assigned_locations;
@@ -214,6 +260,30 @@ void ChunkServerManager::UpdateFileChunkMetadataLocation(
 
         MetadataManager::GetInstance()->SetFileChunkMetadata(metadata);
     }
+}
+
+std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+ChunkServerManager::GetOrCreateChunkServerFileServiceClient(
+    const std::string& server_address) {
+    // 锁住
+    absl::MutexLock chunk_server_file_service_clients_lock_guard(
+        &chunk_server_file_service_clients_lock_);
+
+    // 创建客户端
+    if (!chunk_server_file_service_clients_.contains(server_address)) {
+        chunk_server_file_service_clients_[server_address] =
+            std::make_shared<ChunkServerFileServiceClient>(grpc::CreateChannel(
+                server_address, grpc::InsecureChannelCredentials()));
+    }
+
+    // 客户端可能失效了？会不会出现这种情况
+    if (!chunk_server_file_service_clients_[server_address]) {
+        chunk_server_file_service_clients_[server_address] =
+            std::make_shared<ChunkServerFileServiceClient>(grpc::CreateChannel(
+                server_address, grpc::InsecureChannelCredentials()));
+    }
+
+    return chunk_server_file_service_clients_[server_address];
 }
 
 }  // namespace server

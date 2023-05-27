@@ -68,6 +68,7 @@ add_executable(master_metadata_service_impl_test
     ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/master_metadata_service_impl.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_replica_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
 )
@@ -93,6 +94,7 @@ target_link_libraries(metadata_manager_test
 add_executable(chunk_server_manager_test
     server/master_server/chunk_server_manager_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_replica_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
 )
@@ -101,12 +103,14 @@ target_link_libraries(chunk_server_manager_test
     ${GTEST_BOTH_LIBRARIES}
     protos_shared
     common_shared
+    grpc_client_shared
 )
 
 add_executable(chunk_server_manager_service_impl_test
     server/master_server/chunk_server_manager_service_impl_test.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager_service_impl.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_server_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/master_server/chunk_replica_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/lock_manager.cpp
     ${PROJECT_SOURCE_DIR}/src/server/master_server/metadata_manager.cpp
 )

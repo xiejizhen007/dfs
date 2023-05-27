@@ -36,5 +36,8 @@
     },
     "disk": {
         "block_size": 64
+    },
+    "chunk": {
+        "replica": 3
     }
 }

@@ -2,6 +2,7 @@
 #include "src/server/master_server/chunk_server_heartbeat_task.h"
 #include "src/server/master_server/chunk_server_manager_service_impl.h"
 #include "src/server/master_server/master_metadata_service_impl.h"
+#include "src/server/master_server/chunk_replica_manager.h"
 
 using namespace dfs::server;
 
@@ -27,6 +28,9 @@ int main(int argc, char* argv[]) {
 
     // start heart beat task
     ChunkServerHeartBeatTask::GetInstance()->StartHeartBeatTask();
+
+    // start copy task
+    ChunkReplicaManager::GetInstance()->StartChunkReplicaCopyTask();
 
     server->Wait();
 

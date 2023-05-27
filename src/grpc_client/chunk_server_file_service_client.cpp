@@ -12,6 +12,8 @@ using protos::grpc::InitFileChunkRespond;
 using protos::grpc::ReadFileChunkRespond;
 using protos::grpc::SendChunkDataRespond;
 using protos::grpc::WriteFileChunkRespond;
+using protos::grpc::ApplyChunkReplicaCopyRespond;
+using protos::grpc::ChunkReplicaCopyRespond;
 
 google::protobuf::util::StatusOr<protos::grpc::InitFileChunkRespond>
 ChunkServerFileServiceClient::SendRequest(
@@ -79,6 +81,30 @@ ChunkServerFileServiceClient::SendRequest(
     grpc::ClientContext context;
     AdjustFileChunkVersionRespond respond;
     auto status = stub_->AdjustFileChunkVersion(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
+    return StatusGrpc2Protobuf(status);
+}
+
+google::protobuf::util::StatusOr<protos::grpc::ChunkReplicaCopyRespond>
+ChunkServerFileServiceClient::SendRequest(
+    const protos::grpc::ChunkReplicaCopyRequest& request) {
+    grpc::ClientContext context;
+    ChunkReplicaCopyRespond respond;
+    auto status = stub_->ChunkReplicaCopy(&context, request, &respond);
+    if (status.ok()) {
+        return respond;
+    }
+    return StatusGrpc2Protobuf(status);
+}
+
+google::protobuf::util::StatusOr<protos::grpc::ApplyChunkReplicaCopyRespond>
+ChunkServerFileServiceClient::SendRequest(
+    const protos::grpc::ApplyChunkReplicaCopyRequest& request) {
+    grpc::ClientContext context;
+    ApplyChunkReplicaCopyRespond respond;
+    auto status = stub_->ApplyChunkReplicaCopy(&context, request, &respond);
     if (status.ok()) {
         return respond;
     }

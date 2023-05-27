@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "chunk_server.pb.h"
+#include "src/grpc_client/chunk_server_file_service_client.h"
 
 namespace protos {
 bool operator==(const ChunkServerLocation& l, const ChunkServerLocation& r);
@@ -41,6 +42,8 @@ class ChunkServerManager {
     // 声明友元类，以便访问私有变量
     friend class ChunkServerHeartBeatTask;
 
+    friend class ChunkReplicaManager;
+
    public:
     // 获取单例对象
     static ChunkServerManager* GetInstance();
@@ -59,6 +62,8 @@ class ChunkServerManager {
     ChunkServerLocationFlatSet GetChunkLocation(
         const std::string& chunk_handle);
 
+    size_t GetChunkLocationSize(const std::string& chunk_handle);
+
     // 获取存储块句柄的块服务器地址集合
     ChunkServerLocationFlatSet GetChunkLocationNoLock(
         const std::string& chunk_handle);
@@ -67,12 +72,19 @@ class ChunkServerManager {
     ChunkServerLocationFlatSet AssignChunkServer(
         const std::string& chunk_handle, const uint32_t& server_request_nums);
 
+    // 分配一定数量的块服务器，用于执行数据块副本复制
+    ChunkServerLocationFlatSet AssignChunkServerToCopyReplica(
+        const std::string& chunk_handle, const uint32_t& healthy_replica_nums);
+
     // 更新块服务器信息
     void UpdateChunkServer(
         const protos::ChunkServerLocation& location,
         const uint32_t& available_disk_mb,
         const absl::flat_hash_set<std::string>& chunks_to_add,
         const absl::flat_hash_set<std::string>& chunks_to_remove);
+
+    std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
+    GetOrCreateChunkServerFileServiceClient(const std::string& server_address);
 
    private:
     ChunkServerManager() = default;
@@ -95,6 +107,15 @@ class ChunkServerManager {
         chunk_location_maps_;
 
     absl::Mutex chunk_location_maps_lock_;
+
+    // 块服务器文件服务的客户端映射表
+    absl::flat_hash_map<
+        std::string,
+        std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>>
+        chunk_server_file_service_clients_;
+
+    // 客户端映射表的互斥锁
+    absl::Mutex chunk_server_file_service_clients_lock_;
 };
 
 }  // namespace server

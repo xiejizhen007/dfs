@@ -18,6 +18,7 @@ namespace server {
 // control the chunks locally on the chunkserver
 
 class FileChunkManager {
+    friend class ChunkServerFileServiceImpl;
    public:
     // 获取单例对象
     static FileChunkManager* GetInstance();

@@ -23,6 +23,12 @@ service ChunkServerFileService {
 
     // 主服务器调用该接口，修改副本服务器数据块版本
     rpc AdjustFileChunkVersion(AdjustFileChunkVersionRequest) returns(AdjustFileChunkVersionRespond) {}
+
+    // 主服务器向主副本服务器发起块复制操作
+    rpc ChunkReplicaCopy(ChunkReplicaCopyRequest) returns(ChunkReplicaCopyRespond) {}
+
+    // 主副本服务器向其他块服务器发送数据块
+    rpc ApplyChunkReplicaCopy(ApplyChunkReplicaCopyRequest) returns(ApplyChunkReplicaCopyRespond) {}
 }
 
 message InitFileChunkRequest {
@@ -159,3 +165,29 @@ message AdjustFileChunkVersionRespond {
     // 应该与请求中的 new_chunk_version 相对应
     uint32 chunk_version = 3;
 }
+
+
+message ChunkReplicaCopyRequest {
+    // 数据块句柄
+    string chunk_handle = 1;
+
+    // 服务器位置
+    repeated ChunkServerLocation locations = 2;
+}
+
+message ChunkReplicaCopyRespond {
+
+}
+
+message ApplyChunkReplicaCopyRequest {
+    // 数据块句柄
+    string chunk_handle = 1;
+
+    // 数据块信息
+    FileChunk chunk = 2;
+}
+
+message ApplyChunkReplicaCopyRespond {
+
+}
+

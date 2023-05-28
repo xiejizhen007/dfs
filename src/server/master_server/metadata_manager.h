@@ -44,6 +44,15 @@ class MetadataManager {
 
     void DeleteFileAndChunkMetadata(const std::string& filename);
 
+    void SetLeaseMetadata(const std::string& chunk_handle,
+                          const std::string& client_url,
+                          uint64_t expire_time);
+
+    void RemoveLeaseMetadata(const std::string& chunk_handle);
+
+    std::pair<std::pair<std::string, uint64_t>, bool>
+    GetLeaseMetadata(const std::string& chunk_handle);
+
    private:
     MetadataManager();
 
@@ -60,6 +69,12 @@ class MetadataManager {
     // key: chunk_handle
     dfs::common::parallel_hash_map<std::string, protos::FileChunkMetadata>
         chunk_metadatas_;
+
+    // <chunk_handle, <client url, expire time>>
+    // 确保客户端对数据块写入的独占性
+    dfs::common::parallel_hash_map<std::string,
+                                   std::pair<std::string, uint64_t>>
+        chunk_leases_;
 
     //
     absl::Mutex lock_;

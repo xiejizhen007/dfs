@@ -24,6 +24,7 @@ namespace dfs {
 namespace server {
 
 using dfs::grpc_client::ChunkServerFileServiceClient;
+using dfs::grpc_client::ChunkServerLeaseServiceClient;
 using protos::ChunkServerLocation;
 
 std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
@@ -35,6 +36,10 @@ std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
     }
 
     return locations;
+}
+
+std::string ChunkServerLocationToString(const protos::ChunkServerLocation& location) {
+    return location.server_hostname() + ":" + std::to_string(location.server_port());
 }
 
 ChunkServerManager* ChunkServerManager::GetInstance() {
@@ -284,6 +289,30 @@ ChunkServerManager::GetOrCreateChunkServerFileServiceClient(
     }
 
     return chunk_server_file_service_clients_[server_address];
+}
+
+std::shared_ptr<dfs::grpc_client::ChunkServerLeaseServiceClient>
+ChunkServerManager::GetOrCreateChunkServerLeaseServiceClient(
+    const std::string& server_address) {
+    // 锁住
+    absl::MutexLock chunk_server_lease_service_clients_lock_guard(
+        &chunk_server_lease_service_clients_lock_);
+
+    // 创建客户端
+    if (!chunk_server_lease_service_clients_.contains(server_address)) {
+        chunk_server_lease_service_clients_[server_address] =
+            std::make_shared<ChunkServerLeaseServiceClient>(grpc::CreateChannel(
+                server_address, grpc::InsecureChannelCredentials()));
+    }
+
+    // 客户端可能失效了？会不会出现这种情况
+    if (!chunk_server_lease_service_clients_[server_address]) {
+        chunk_server_lease_service_clients_[server_address] =
+            std::make_shared<ChunkServerLeaseServiceClient>(grpc::CreateChannel(
+                server_address, grpc::InsecureChannelCredentials()));
+    }
+
+    return chunk_server_lease_service_clients_[server_address];
 }
 
 }  // namespace server

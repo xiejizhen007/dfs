@@ -48,6 +48,8 @@ grpc::Status ChunkServerLeaseServiceImpl::GrantLease(
     } else {
         //
         LOG(INFO) << "accept lease for " << chunk_handle;
+        ChunkServerImpl::GetInstance()->AddOrUpdateLease(
+            chunk_handle, request->lease_expiration_time().seconds());
         respond->set_status(GrantLeaseRespond::ACCEPTED);
         return grpc::Status::OK;
     }

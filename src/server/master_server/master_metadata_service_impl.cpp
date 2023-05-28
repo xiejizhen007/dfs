@@ -8,6 +8,8 @@ namespace server {
 
 using dfs::common::StatusProtobuf2Grpc;
 using dfs::grpc_client::ChunkServerFileServiceClient;
+using protos::grpc::GrantLeaseRequest;
+using protos::grpc::GrantLeaseRespond;
 using protos::grpc::InitFileChunkRequest;
 
 MasterMetadataServiceImpl::MasterMetadataServiceImpl() {}
@@ -21,7 +23,7 @@ MetadataManager* MasterMetadataServiceImpl::metadata_manager() {
 }
 
 grpc::Status MasterMetadataServiceImpl::HandleFileCreation(
-    const protos::grpc::OpenFileRequest* request,
+    grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
     const std::string filename = request->filename();
     LOG(INFO) << "MasterMetadataServiceImpl::HandleFileCreation, filename: "
@@ -43,7 +45,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileCreation(
     }
 
     //
-    auto chunk_creation_status = HandleFileChunkCreation(request, respond);
+    auto chunk_creation_status =
+        HandleFileChunkCreation(context, request, respond);
     if (!chunk_creation_status.ok()) {
         LOG(ERROR) << "handle file chunk creation failed, rollback, clearing "
                       "failed metadata";
@@ -54,7 +57,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileCreation(
 }
 
 grpc::Status MasterMetadataServiceImpl::HandleFileChunkRead(
-    const protos::grpc::OpenFileRequest* request,
+    grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
     // get the filename, chunk_index
     const std::string& filename = request->filename();
@@ -107,7 +110,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkRead(
 }
 
 grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
-    const protos::grpc::OpenFileRequest* request,
+    grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
     // get the filename, chunk_index
     const std::string& filename = request->filename();
@@ -134,7 +137,8 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
 
         LOG(INFO) << "will create a file chunk for " << filename
                   << " at chunk index " << chunk_index;
-        auto chunk_create_status = HandleFileChunkCreation(request, respond);
+        auto chunk_create_status =
+            HandleFileChunkCreation(context, request, respond);
         if (!chunk_create_status.ok()) {
             LOG(ERROR) << "create file chunk failed, because "
                        << chunk_create_status.error_message();
@@ -154,10 +158,34 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         return dfs::common::StatusProtobuf2Grpc(chunk_handle_or.status());
     }
 
-    // get the chunk handle
-    const auto& chunk_handle = chunk_handle_or.value();
-    LOG(INFO) << "wirte: try to get chunk handle " << chunk_handle
-              << " metadata";
+    const std::string& chunk_handle = chunk_handle_or.value();
+
+    // 当前租约已分配
+    bool lease_granted = false;
+
+    // try to get lease
+    auto lease_result_or = metadata_manager()->GetLeaseMetadata(chunk_handle);
+    if (lease_result_or.second) {
+        // 说明存在 chunk_handle 对应的租约
+
+        if (absl::FromUnixSeconds(lease_result_or.first.second) > absl::Now()) {
+            if (context->peer() == lease_result_or.first.first) {
+                // 当前租约仍有效
+                LOG(INFO) << "lease " << chunk_handle << " is ok";
+                lease_granted = true;
+            } else {
+                // 被其他客户端拿到租约了
+                LOG(INFO) << "other guy get the lease";
+                return grpc::Status(grpc::StatusCode::UNKNOWN,
+                                    "other guy get the lease");
+            }
+        } else {
+            // 租约过期了
+            LOG(INFO) << "lease " << chunk_handle << " is expired";
+            metadata_manager()->RemoveLeaseMetadata(chunk_handle);
+        }
+    }
+
     auto file_chunk_metadata_or =
         metadata_manager()->GetFileChunkMetadata(chunk_handle);
     if (!file_chunk_metadata_or.ok()) {
@@ -169,7 +197,63 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
 
     // get file chunk metadata
     protos::FileChunkMetadata respondMetadata = file_chunk_metadata_or.value();
-    auto chunk_version = respondMetadata.version();
+    const auto chunk_version = respondMetadata.version();
+
+    if (!lease_granted) {
+        // 需要分配新的租约
+        const std::string primary_server_address = std::move(
+            ChunkServerLocationToString(respondMetadata.primary_location()));
+
+        if (primary_server_address.size() < 3) {
+            LOG(ERROR) << "get chunk metadata primary location error";
+            return grpc::Status(grpc::StatusCode::UNKNOWN,
+                                "get chunk metadata primary location error");
+        }
+
+        auto lease_client =
+            chunk_server_manager()->GetOrCreateChunkServerLeaseServiceClient(
+                primary_server_address);
+        if (!lease_client) {
+            LOG(ERROR) << "can not talk to " << primary_server_address
+                       << " lease service";
+            return grpc::Status(grpc::StatusCode::UNKNOWN,
+                                "can not talk to lease service");
+        }
+
+        // ok
+        GrantLeaseRequest lease_req;
+        lease_req.set_chunk_handle(chunk_handle);
+        lease_req.set_chunk_version(chunk_version);
+        // use config
+        uint64_t next_expire_time =
+            absl::ToUnixSeconds(absl::Now() + absl::Seconds(60));
+        lease_req.mutable_lease_expiration_time()->set_seconds(
+            next_expire_time);
+
+        auto lease_respond = lease_client->SendRequest(lease_req);
+        if (lease_respond.ok()) {
+            LOG(INFO) << "get lease ok, status: "
+                      << lease_respond.value().status();
+            metadata_manager()->SetLeaseMetadata(chunk_handle, context->peer(),
+                                                 next_expire_time);
+            lease_granted = true;
+        } else {
+            LOG(ERROR) << "can not get lease from primary server, because "
+                       << lease_respond.status().ToString();
+        }
+    }
+
+    if (!lease_granted) {
+        // 这说明上面租约分配有问题
+        // 没有租约，禁止写入数据
+        LOG(ERROR) << "can not grant lease for " << chunk_handle;
+        return grpc::Status(grpc::StatusCode::UNKNOWN,
+                            "can not grant lease for " + chunk_handle);
+    }
+
+    // get the chunk handle
+    LOG(INFO) << "wirte: try to get chunk handle " << chunk_handle
+              << " metadata";
     auto new_chunk_version = chunk_version + 1;
     LOG(INFO) << "respond metadata chunk_handle: "
               << respondMetadata.chunk_handle();
@@ -178,8 +262,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     for (const auto& location :
          chunk_server_manager()->GetChunkLocation(chunk_handle)) {
         const std::string server_address =
-            location.server_hostname() + ":" +
-            std::to_string(location.server_port());
+            std::move(ChunkServerLocationToString(location));
 
         LOG(INFO) << "store chunk_handle " << chunk_handle
                   << " in server_address";
@@ -201,7 +284,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
 }
 
 grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
-    const protos::grpc::OpenFileRequest* request,
+    grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
     const auto filename = request->filename();
     const auto chunk_index = request->chunk_index();
@@ -269,8 +352,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
          chunk_server_manager()->GetChunkLocation(chunk_handle)) {
         // 设置好块服务器地址
         const std::string server_address =
-            location.server_hostname() + ":" +
-            std::to_string(location.server_port());
+            std::move(ChunkServerLocationToString(location));
 
         auto client = GetChunkServerFileServiceClient(server_address);
         // set up request, and send request
@@ -311,13 +393,14 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkCreation(
 grpc::Status MasterMetadataServiceImpl::OpenFile(
     grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
+    LOG(INFO) << "OpenFile: client url " << context->peer();
     switch (request->mode()) {
         case protos::grpc::OpenFileRequest::CREATE:
-            return HandleFileCreation(request, respond);
+            return HandleFileCreation(context, request, respond);
         case protos::grpc::OpenFileRequest::READ:
-            return HandleFileChunkRead(request, respond);
+            return HandleFileChunkRead(context, request, respond);
         case protos::grpc::OpenFileRequest::WRITE:
-            return HandleFileChunkWrite(request, respond);
+            return HandleFileChunkWrite(context, request, respond);
         default:
             return grpc::Status(grpc::StatusCode::INVALID_ARGUMENT,
                                 "OpenFile got invaild mode");

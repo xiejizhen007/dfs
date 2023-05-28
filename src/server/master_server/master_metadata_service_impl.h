@@ -19,18 +19,22 @@ class MasterMetadataServiceImpl final
 
    protected:
     grpc::Status HandleFileCreation(
+        grpc::ServerContext* context,
         const protos::grpc::OpenFileRequest* request,
         protos::grpc::OpenFileRespond* respond);
 
     grpc::Status HandleFileChunkCreation(
+        grpc::ServerContext* context,
         const protos::grpc::OpenFileRequest* request,
         protos::grpc::OpenFileRespond* respond);
 
     grpc::Status HandleFileChunkRead(
+        grpc::ServerContext* context,
         const protos::grpc::OpenFileRequest* request,
         protos::grpc::OpenFileRespond* respond);
 
     grpc::Status HandleFileChunkWrite(
+        grpc::ServerContext* context,
         const protos::grpc::OpenFileRequest* request,
         protos::grpc::OpenFileRespond* respond);
 

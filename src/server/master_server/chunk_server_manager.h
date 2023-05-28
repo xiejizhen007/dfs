@@ -10,6 +10,7 @@
 
 #include "chunk_server.pb.h"
 #include "src/grpc_client/chunk_server_file_service_client.h"
+#include "src/grpc_client/chunk_server_lease_service_client.h"
 
 namespace protos {
 bool operator==(const ChunkServerLocation& l, const ChunkServerLocation& r);
@@ -38,6 +39,14 @@ using ChunkServerLocationFlatSet =
 std::vector<protos::ChunkServerLocation> ChunkServerLocationFlatSetToVector(
     const ChunkServerLocationFlatSet& location_set);
 
+// 将块服务器位置转化为 "ip:port" 的字符串格式
+std::string ChunkServerLocationToString(const protos::ChunkServerLocation& location);
+
+/**
+ * 块服务器管理
+ * 1. 管理着所以块服务器信息
+ * 2. 管理与块服务器通信的客户端
+*/
 class ChunkServerManager {
     // 声明友元类，以便访问私有变量
     friend class ChunkServerHeartBeatTask;
@@ -86,6 +95,9 @@ class ChunkServerManager {
     std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>
     GetOrCreateChunkServerFileServiceClient(const std::string& server_address);
 
+    std::shared_ptr<dfs::grpc_client::ChunkServerLeaseServiceClient>
+    GetOrCreateChunkServerLeaseServiceClient(const std::string& server_address);
+
    private:
     ChunkServerManager() = default;
 
@@ -116,6 +128,15 @@ class ChunkServerManager {
 
     // 客户端映射表的互斥锁
     absl::Mutex chunk_server_file_service_clients_lock_;
+
+    // 与租约服务进行通信的客户端
+    absl::flat_hash_map<
+        std::string,
+        std::shared_ptr<dfs::grpc_client::ChunkServerLeaseServiceClient>>
+        chunk_server_lease_service_clients_;
+
+    // 客户端映射表的互斥锁
+    absl::Mutex chunk_server_lease_service_clients_lock_;
 };
 
 }  // namespace server

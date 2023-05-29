@@ -83,6 +83,7 @@ google::protobuf::util::Status upload(const std::string& filename) {
 
 google::protobuf::util::Status set(const std::string& filename,
                                    const std::string& data) {
+
     return write(filename, data, 0, data.size()).status();
 }
 

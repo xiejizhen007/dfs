@@ -185,9 +185,17 @@ google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
          chunk_index++) {
         size_t bytes_to_write = std::min(remain_bytes, chunk_size);
 
+        auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
         auto respond_or =
             WriteFileChunk(filename, data.substr(bytes_write), chunk_index,
                            chunk_start_offset, bytes_to_write);
+        auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+        double durationMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+                .count();
+
+        LOG(INFO) << "write file chunk " << durationMs << "ms";
+
         if (!respond_or.ok()) {
             return respond_or.status();
         }
@@ -220,8 +228,17 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
 
     // 需要发送的数据
     auto data_to_send = data.substr(0, nbytes);
+    auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     // 数据的校验和
     auto checksum = dfs::common::ComputeHash(data_to_send);
+    auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+    double durationMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+
+    LOG(INFO) << "compute checksum " << durationMs << "ms";
+
+    start = std::chrono::high_resolution_clock::now();  // 记录开始时间
 
     // 数据发送线程
     std::vector<std::thread> send_data_threads;
@@ -262,6 +279,13 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         thread.join();
     }
 
+    end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+    durationMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+
+    LOG(INFO) << "send data " << durationMs << "ms";
+
     // TODO:
     // 将数据写入到主副本块服务器，让主副本块服务器在将更新推送到其他副本的块服务器
 
@@ -273,7 +297,7 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     write_request.mutable_header()->set_checksum(checksum);
 
     // 将块服务器地址写入请求中
-    for (auto location: entry.locations) {
+    for (auto location : entry.locations) {
         write_request.mutable_locations()->Add(std::move(location));
     }
 

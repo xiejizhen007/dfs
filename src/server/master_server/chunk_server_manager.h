@@ -44,7 +44,7 @@ std::string ChunkServerLocationToString(const protos::ChunkServerLocation& locat
 
 /**
  * 块服务器管理
- * 1. 管理着所以块服务器信息
+ * 1. 管理着所有块服务器信息
  * 2. 管理与块服务器通信的客户端
 */
 class ChunkServerManager {

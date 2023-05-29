@@ -76,9 +76,6 @@ class MetadataManager {
                                    std::pair<std::string, uint64_t>>
         chunk_leases_;
 
-    //
-    absl::Mutex lock_;
-
     // 用于给每个 chunk 分配 uuid
     std::atomic<uint64_t> global_chunk_id_;
 };

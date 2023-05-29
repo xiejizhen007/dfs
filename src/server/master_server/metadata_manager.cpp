@@ -83,12 +83,12 @@ MetadataManager::CreateChunkHandle(const std::string& filename,
         }
 
         // 给当前文件上 writerlock
-        auto cur_path_lock_or = lock_manager_->FetchLock(filename);
-        if (!cur_path_lock_or.ok()) {
-            return cur_path_lock_or.status();
+        auto file_lock_or = lock_manager_->FetchLock(filename);
+        if (!file_lock_or.ok()) {
+            return file_lock_or.status();
         }
 
-        absl::WriterMutexLock(cur_path_lock_or.value());
+        absl::WriterMutexLock file_lock_guard(file_lock_or.value());
 
         // 获取 file 的 metadata
         auto file_metadata_or = GetFileMetadata(filename);
@@ -102,8 +102,6 @@ MetadataManager::CreateChunkHandle(const std::string& filename,
         new_chunk_handle = AllocateNewChunkHandle();
         file_metadata->set_filename(filename);
 
-        // 文件锁锁不住，需要额外加一个锁
-        absl::WriterMutexLock lock_guard(&lock_);
         auto& chunk_handles = (*file_metadata->mutable_chunk_handles());
         if (chunk_handles.contains(chunk_index)) {
             return google::protobuf::util::AlreadyExistsError(

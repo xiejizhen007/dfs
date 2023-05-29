@@ -128,7 +128,8 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     // LOG(INFO) << "read_data: " << read_data << "  "
     //           << "length: " << read_data.size();
 
-    LOG(INFO) << "data length: " << read_data.size() << ", spend: " << durationMs << "ms";
+    LOG(INFO) << "data length: " << read_data.size()
+              << ", spend: " << durationMs << "ms";
 
     respond->set_data(read_data);
     respond->set_read_length(read_data.size());
@@ -150,7 +151,6 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
         return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
                             "no write lease");
     }
-
 
     auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     auto status = WriteFileChunkLocally(header, respond);
@@ -250,10 +250,17 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunkLocally(
         return grpc::Status::OK;
     }
 
+    auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     // 将 cache 里读到的数据写入
     auto write_result = file_chunk_manager()->WriteToChunk(
         header.chunk_handle(), header.version(), header.offset(),
         header.length(), data_or.value());
+    auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+    double durationMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+
+    LOG(INFO) << "write to leveldb " << durationMs << "ms";
 
     LOG(INFO) << "write to local status: " + write_result.status().ToString();
 

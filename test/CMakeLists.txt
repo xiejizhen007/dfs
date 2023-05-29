@@ -174,4 +174,24 @@ add_executable(benchmark_read benchmarks/read.cpp
     ${PROJECT_SOURCE_DIR}/src/client/dfs_client.cpp
     ${PROJECT_SOURCE_DIR}/src/client/dfs_client_impl.cpp
 )
-target_link_libraries(benchmark_read benchmark::benchmark protos_shared common_shared grpc_client_shared)
+
+target_link_libraries(benchmark_read
+    benchmark::benchmark
+    protos_shared
+    common_shared
+    grpc_client_shared
+    leveldb
+)
+
+add_executable(benchmark_write benchmarks/write.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/client_cache_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client_impl.cpp
+)
+
+target_link_libraries(benchmark_write
+    benchmark::benchmark
+    protos_shared
+    common_shared
+    grpc_client_shared
+)

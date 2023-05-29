@@ -68,10 +68,15 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
     const uint32_t& offset = request->offset();
     const uint32_t& length = request->length();
 
+    LOG(INFO) << "Client address: " << context->peer();
+
     //
     LOG(INFO) << "try to read chunk, chunk_handle: " << chunk_handle
               << ",version: " << version << ",offset: " << offset
               << ",length: " << length;
+
+    // 计算从 leveldb 读取数据块的时间
+    auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
 
     auto read_status_or = file_chunk_manager()->ReadFromChunk(
         chunk_handle, version, offset, length);
@@ -114,11 +119,16 @@ grpc::Status ChunkServerFileServiceImpl::ReadFileChunk(
         return grpc::Status::OK;
     }
 
+    auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+    double durationMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+
     const auto& read_data = read_status_or.value();
     // LOG(INFO) << "read_data: " << read_data << "  "
     //           << "length: " << read_data.size();
 
-    LOG(INFO) << "data length: " << read_data.size();
+    LOG(INFO) << "data length: " << read_data.size() << ", spend: " << durationMs << "ms";
 
     respond->set_data(read_data);
     respond->set_read_length(read_data.size());
@@ -134,7 +144,15 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
     // get requested parameters
     const auto& header = request->header();
 
+
+    auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     auto status = WriteFileChunkLocally(header, respond);
+    auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
+    double durationMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    LOG(INFO) << "WriteFileChunkLocally spend " << durationMs << "ms";
+
     // write failed
     if (respond->status() != protos::grpc::FileChunkMutationStatus::OK) {
         return status;

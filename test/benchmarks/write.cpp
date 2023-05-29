@@ -1,9 +1,5 @@
 #include <benchmark/benchmark.h>
 #include <glog/logging.h>
-#include <leveldb/db.h>
-
-#include <chrono>
-#include <iostream>
 
 #include "src/client/dfs_client.h"
 #include "src/common/config_manager.h"
@@ -11,18 +7,17 @@
 
 using google::protobuf::util::IsAlreadyExists;
 
-static void BM_READ_FILE(benchmark::State& state) {
+static void BM_WRITE_FILE(benchmark::State& state) {
     auto init_status = dfs::client::init_client();
-    dfs::client::open("/benchmark_read", dfs::client::OpenFlag::CREATE);
-    dfs::client::set("/benchmark_read", std::string(128 * 1024 * 1024, '0'));
-
+    dfs::client::open("/benchmark_write", dfs::client::OpenFlag::CREATE);
     uint64_t ok = 0;
     uint64_t failed = 0;
     const int fileSizeMB = state.range(0);
 
     for (auto _ : state) {
-        auto status_or = dfs::client::read("/benchmark_read", 0,
-                                           state.range(0) * 1024 * 1024);
+        // 写入 fileSizeMB 数据
+        auto status_or = dfs::client::set(
+            "/benchmark_write", std::string(fileSizeMB * 1024 * 1024, '0'));
 
         state.PauseTiming();
         if (status_or.ok()) {
@@ -37,7 +32,7 @@ static void BM_READ_FILE(benchmark::State& state) {
     state.counters["failed"] = failed;
 }
 
-BENCHMARK(BM_READ_FILE)->RangeMultiplier(2)->Range(1, 128)->Iterations(100);
+BENCHMARK(BM_WRITE_FILE)->RangeMultiplier(2)->Range(1, 128)->Iterations(100);
 
 int main(int argc, char** argv) {
     // 初始化配置

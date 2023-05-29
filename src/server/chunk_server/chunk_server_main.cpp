@@ -8,10 +8,12 @@
 #include "src/server/chunk_server/chunk_server_control_service_impl.h"
 #include "src/server/chunk_server/chunk_server_file_service_impl.h"
 #include "src/server/chunk_server/chunk_server_impl.h"
+#include "src/server/chunk_server/chunk_server_lease_service_impl.h"
 
 using dfs::common::ConfigManager;
 using dfs::server::ChunkServerControlServiceImpl;
 using dfs::server::ChunkServerFileServiceImpl;
+using dfs::server::ChunkServerLeaseServiceImpl;
 using dfs::server::ChunkServerImpl;
 using dfs::server::FileChunkManager;
 
@@ -59,6 +61,9 @@ int main(int argc, char* argv[]) {
 
     ChunkServerFileServiceImpl file_service;
     builder.RegisterService(&file_service);
+
+    ChunkServerLeaseServiceImpl lease_service;
+    builder.RegisterService(&lease_service);
 
     auto chunk_server_impl = ChunkServerImpl::GetInstance();
     chunk_server_impl->Initialize(chunk_server_name,

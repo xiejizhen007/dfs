@@ -218,6 +218,23 @@ void MetadataManager::DeleteFileAndChunkMetadata(const std::string& filename) {
     }
 }
 
+// lease
+
+void MetadataManager::SetLeaseMetadata(
+    const std::string& chunk_handle,
+    const std::string& clent_url, uint64_t expire_time) {
+    chunk_leases_.Set(chunk_handle, std::make_pair(clent_url, expire_time));
+}
+
+void MetadataManager::RemoveLeaseMetadata(const std::string& chunk_handle) {
+    chunk_leases_.Erase(chunk_handle);
+}
+
+std::pair<std::pair<std::string, uint64_t>, bool>
+MetadataManager::GetLeaseMetadata(const std::string& chunk_handle) {
+    return chunk_leases_.TryGet(chunk_handle);
+}
+
 std::string MetadataManager::AllocateNewChunkHandle() {
     return std::to_string(global_chunk_id_.fetch_add(1));
 }

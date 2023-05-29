@@ -144,6 +144,13 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
     // get requested parameters
     const auto& header = request->header();
 
+    if (!chunk_server_impl()->HasWriteLease(header.chunk_handle())) {
+        LOG(ERROR)
+            << "can not write to local chunk, because dont have write lease";
+        return grpc::Status(grpc::StatusCode::PERMISSION_DENIED,
+                            "no write lease");
+    }
+
 
     auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     auto status = WriteFileChunkLocally(header, respond);

@@ -67,9 +67,6 @@ class FileChunkManager {
     google::protobuf::util::StatusOr<uint32_t> GetChunkVersion(
         const std::string& chunk_handle);
 
-   private:
-    FileChunkManager() = default;
-
     // get the specified chunk from the db
     google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
     GetFileChunk(const std::string& chunk_handle);
@@ -77,6 +74,9 @@ class FileChunkManager {
     // get the specified chunk of the specified version from the db
     google::protobuf::util::StatusOr<std::shared_ptr<protos::FileChunk>>
     GetFileChunk(const std::string& chunk_handle, const uint32_t& version);
+
+   private:
+    FileChunkManager() = default;
 
     // <chunk_handle, version>
     dfs::common::parallel_hash_map<std::string, uint32_t> chunk_versions_;

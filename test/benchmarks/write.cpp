@@ -16,8 +16,8 @@ static void BM_WRITE_FILE(benchmark::State& state) {
 
     for (auto _ : state) {
         // 写入 fileSizeMB 数据
-        auto status_or = dfs::client::set(
-            "/benchmark_write", std::string(fileSizeMB * 1024 * 1024, '0'));
+        auto status_or =
+            dfs::client::set("/benchmark_write", fileSizeMB * 1024 * 1024);
 
         state.PauseTiming();
         if (status_or.ok()) {

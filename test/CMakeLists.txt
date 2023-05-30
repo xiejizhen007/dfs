@@ -195,3 +195,29 @@ target_link_libraries(benchmark_write
     common_shared
     grpc_client_shared
 )
+
+add_executable(benchmark_file_chunk_manager benchmarks/chunk_server/file_chunk_manager_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/server/chunk_server/file_chunk_manager.cpp
+)
+
+target_link_libraries(benchmark_file_chunk_manager
+    benchmark::benchmark
+    protos_shared
+    common_shared
+    grpc_client_shared
+    leveldb
+)
+
+# stress test
+add_executable(stress_write stress_test/write_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/client_cache_manager.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client.cpp
+    ${PROJECT_SOURCE_DIR}/src/client/dfs_client_impl.cpp
+)
+
+target_link_libraries(stress_write
+    protos_shared
+    common_shared
+    grpc_client_shared
+    pthread
+)

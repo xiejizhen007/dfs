@@ -14,32 +14,29 @@ enum OpenFlag { READ = 1, WRITE = 2, CREATE = 4 };
 
 struct Data {
     size_t bytes;
-    std::string buffer;
-    Data() : bytes(0), buffer(std::string()) {}
-    Data(size_t _bytes, const std::string& _buffer)
-        : bytes(_bytes), buffer(_buffer) {}
+    void* buffer;
+    Data() : bytes(0), buffer(nullptr) {}
+    Data(size_t _bytes, void* _buffer) : bytes(_bytes), buffer(_buffer) {}
 };
 
 google::protobuf::util::Status init_client();
 
-google::protobuf::util::Status open(const std::string& filename,
-                                    unsigned int flag);
+google::protobuf::util::Status open(const char* filename, unsigned int flag);
 
-google::protobuf::util::StatusOr<Data> read(const std::string& filename,
-                                            size_t offset, size_t nbytes);
+google::protobuf::util::StatusOr<Data> read(const char* filename, size_t offset,
+                                            size_t nbytes);
 
-google::protobuf::util::StatusOr<size_t> write(const std::string& filename,
-                                               const std::string& data,
-                                               size_t offset, size_t nbytes);
+google::protobuf::util::StatusOr<size_t> write(const char* filename,
+                                               void* buffer, size_t offset,
+                                               size_t nbytes);
 
-google::protobuf::util::Status remove(const std::string& filename);
+google::protobuf::util::Status remove(const char* filename);
 
-google::protobuf::util::Status close(const std::string& filename);
+google::protobuf::util::Status close(const char* filename);
 
-google::protobuf::util::Status upload(const std::string& filename);
+google::protobuf::util::Status upload(const char* filename);
 
-google::protobuf::util::Status set(const std::string& filename,
-                                   const std::string& data);
+google::protobuf::util::Status set(const char* filename, size_t size);
 
 void reset_client();
 

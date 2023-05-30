@@ -14,7 +14,7 @@ using google::protobuf::util::IsAlreadyExists;
 static void BM_READ_FILE(benchmark::State& state) {
     auto init_status = dfs::client::init_client();
     dfs::client::open("/benchmark_read", dfs::client::OpenFlag::CREATE);
-    dfs::client::set("/benchmark_read", std::string(128 * 1024 * 1024, '0'));
+    dfs::client::set("/benchmark_read", 128 * 1024 * 1024);
 
     uint64_t ok = 0;
     uint64_t failed = 0;

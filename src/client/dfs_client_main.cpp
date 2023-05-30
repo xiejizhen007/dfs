@@ -36,11 +36,11 @@ int main(int argc, char* argv[]) {
         const auto& token = ParseCommand(command);
 
         if (token[0] == "open" && token.size() == 3) {
-            auto status = open(token[1], std::stoi(token[2]));
+            auto status = open(token[1].c_str(), std::stoi(token[2]));
             LOG(INFO) << "open status: " << status.ToString();
         } else if (token[0] == "read" && token.size() == 4) {
-            auto status =
-                read(token[1], std::stoi(token[2]), std::stoi(token[3]));
+            auto status = read(token[1].c_str(), std::stoi(token[2]),
+                               std::stoi(token[3]));
             if (status.ok()) {
                 auto data = status.value();
                 // LOG(INFO) << "read nbytes: " << data.bytes
@@ -50,17 +50,17 @@ int main(int argc, char* argv[]) {
                 LOG(INFO) << "read status: " << status.status().ToString();
             }
         } else if (token[0] == "write" && token.size() == 5) {
-            auto status = write(token[1], token[2], std::stoi(token[3]),
-                                std::stoi(token[4]));
+            auto status = write(token[1].c_str(), (void*)token[2].c_str(),
+                                std::stoi(token[3]), std::stoi(token[4]));
             LOG(INFO) << "write status: " << status.status().ToString();
         } else if (token[0] == "remove" && token.size() == 2) {
-            auto status = remove(token[1]);
+            auto status = dfs::client::remove(token[1].c_str());
             LOG(INFO) << "remove status: " << status.ToString();
         } else if (token[0] == "upload" && token.size() == 2) {
-            auto status = upload(token[1]);
+            auto status = upload(token[1].c_str());
             LOG(INFO) << "upload status: " << status.ToString();
         } else if (token[0] == "set" && token.size() == 3) {
-            auto status = set(token[1], std::string(std::stoi(token[2]), '0'));
+            auto status = set(token[1].c_str(), std::stoi(token[2]));
             LOG(INFO) << "set status: " << status.ToString();
         } else if (token[0] == "quit") {
             LOG(INFO) << "Quit....";

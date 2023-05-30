@@ -37,8 +37,7 @@ DfsClientImpl::DfsClientImpl() {
     config_manager_ = ConfigManager::GetInstance();
 }
 
-google::protobuf::util::Status DfsClientImpl::CreateFile(
-    const std::string& filename) {
+google::protobuf::util::Status DfsClientImpl::CreateFile(const char* filename) {
     // set up request
     OpenFileRequest request;
     request.set_filename(filename);
@@ -53,17 +52,15 @@ google::protobuf::util::Status DfsClientImpl::CreateFile(
     return OkStatus();
 }
 
-google::protobuf::util::Status DfsClientImpl::DeleteFile(
-    const std::string& filename) {
+google::protobuf::util::Status DfsClientImpl::DeleteFile(const char* filename) {
     // set up request
     DeleteFileRequest request;
     request.set_filename(filename);
     return master_metadata_service_client_->SendRequest(request);
 }
 
-google::protobuf::util::StatusOr<std::pair<size_t, std::string>>
-DfsClientImpl::ReadFile(const std::string& filename, size_t offset,
-                        size_t nbytes) {
+google::protobuf::util::StatusOr<std::pair<size_t, void*>>
+DfsClientImpl::ReadFile(const char* filename, size_t offset, size_t nbytes) {
     // 一个 chunk 64MB
     const size_t chunk_size = config_manager_->GetBlockSize() * common::bytesMB;
 
@@ -101,13 +98,11 @@ DfsClientImpl::ReadFile(const std::string& filename, size_t offset,
         remain_bytes -= actually_read_bytes;
     }
 
-    auto res = std::string((char*)buffer, nbytes);
-    free(buffer);
-    return std::make_pair(bytes_read, res);
+    return std::make_pair(bytes_read, buffer);
 }
 
 google::protobuf::util::StatusOr<protos::grpc::ReadFileChunkRespond>
-DfsClientImpl::ReadFileChunk(const std::string& filename, size_t chunk_index,
+DfsClientImpl::ReadFileChunk(const char* filename, size_t chunk_index,
                              size_t offset, size_t nbytes) {
     // TODO: set up chunk_handle, chunk_version from chunk metadata.
     std::string chunk_handle;
@@ -173,8 +168,7 @@ DfsClientImpl::ReadFileChunk(const std::string& filename, size_t chunk_index,
 }
 
 google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
-    const std::string& filename, const std::string& data, size_t offset,
-    size_t nbytes) {
+    const char* filename, void* buffer, size_t offset, size_t nbytes) {
     // TODO: use config file, chunk is 4MB
     const size_t chunk_size = config_manager_->GetBlockSize() * common::bytesMB;
     size_t chunk_start_offset = offset % chunk_size;
@@ -186,9 +180,9 @@ google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
         size_t bytes_to_write = std::min(remain_bytes, chunk_size);
 
         auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
-        auto respond_or =
-            WriteFileChunk(filename, data.substr(bytes_write), chunk_index,
-                           chunk_start_offset, bytes_to_write);
+        void* buffer_start = ((char*)buffer + bytes_write);
+        auto respond_or = WriteFileChunk(filename, buffer_start, chunk_index,
+                                         chunk_start_offset, bytes_to_write);
         auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
         double durationMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -212,9 +206,9 @@ google::protobuf::util::StatusOr<size_t> DfsClientImpl::WriteFile(
 }
 
 google::protobuf::util::StatusOr<protos::grpc::WriteFileChunkRespond>
-DfsClientImpl::WriteFileChunk(const std::string& filename,
-                              const std::string& data, size_t chunk_index,
-                              size_t offset, size_t nbytes) {
+DfsClientImpl::WriteFileChunk(const char* filename, void* buffer,
+                              size_t chunk_index, size_t offset,
+                              size_t nbytes) {
     std::string chunk_handle;
     size_t chunk_version;
     CacheManager::ChunkServerLocationEntry entry;
@@ -226,19 +220,21 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         return get_metadata_status;
     }
 
+    absl::Time start_time = absl::Now();
     // 需要发送的数据
-    auto data_to_send = data.substr(0, nbytes);
-    auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
+    auto data_to_send = std::string((const char*)buffer, nbytes);
+    absl::Time end_time = absl::Now();
+    absl::Duration elapsed_time = end_time - start_time;
+    LOG(INFO) << "make nbytes buffer to data_to_send "
+              << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
+
+    start_time = absl::Now();
     // 数据的校验和
     auto checksum = dfs::common::ComputeHash(data_to_send);
-    auto end = std::chrono::high_resolution_clock::now();  // 记录结束时间
-    double durationMs =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-            .count();
-
-    LOG(INFO) << "compute checksum " << durationMs << "ms";
-
-    start = std::chrono::high_resolution_clock::now();  // 记录开始时间
+    end_time = absl::Now();
+    elapsed_time = end_time - start_time;
+    LOG(INFO) << "ComputeHash data_to_send "
+              << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
 
     // 数据发送线程
     std::vector<std::thread> send_data_threads;
@@ -249,13 +245,33 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         send_data_threads.push_back(std::thread([&, server_address]() {
             // 设置数据发送请求
             SendChunkDataRequest send_request;
+            start_time = absl::Now();
+            // 数据的校验和
             send_request.set_checksum(checksum);
+            end_time = absl::Now();
+            elapsed_time = end_time - start_time;
+            LOG(INFO) << "request set chunksum "
+                      << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
+
+            start_time = absl::Now();
+            // 数据的校验和
             send_request.set_data(data_to_send);
+            end_time = absl::Now();
+            elapsed_time = end_time - start_time;
+            LOG(INFO) << "request set data "
+                      << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
+
             // 获取 grpc 客户端
             auto chunk_server_file_service_client =
                 GetChunkServerFileServiceClient(server_address);
+
+            start_time = absl::Now();
             auto send_respond_or =
                 chunk_server_file_service_client->SendRequest(send_request);
+            end_time = absl::Now();
+            elapsed_time = end_time - start_time;
+            LOG(INFO) << "request send data, send request "
+                      << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
             if (!send_respond_or.ok()) {
                 LOG(ERROR) << "send chunk data is failed, because "
                            << send_respond_or.status().ToString();
@@ -279,15 +295,10 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         thread.join();
     }
 
-    end = std::chrono::high_resolution_clock::now();  // 记录结束时间
-    durationMs =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
-            .count();
-
-    LOG(INFO) << "send data " << durationMs << "ms";
-
     // TODO:
     // 将数据写入到主副本块服务器，让主副本块服务器在将更新推送到其他副本的块服务器
+
+    start_time = absl::Now();
 
     WriteFileChunkRequest write_request;
     write_request.mutable_header()->set_chunk_handle(chunk_handle);
@@ -295,6 +306,11 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
     write_request.mutable_header()->set_offset(offset);
     write_request.mutable_header()->set_length(nbytes);
     write_request.mutable_header()->set_checksum(checksum);
+
+    end_time = absl::Now();
+    elapsed_time = end_time - start_time;
+    LOG(INFO) << "set up write data request "
+              << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
 
     // 将块服务器地址写入请求中
     for (auto location : entry.locations) {
@@ -318,8 +334,15 @@ DfsClientImpl::WriteFileChunk(const std::string& filename,
         return UnknownError("can not talk to primary chunk server");
     }
 
+    start_time = absl::Now();
+
     auto respond_or =
         chunk_server_file_service_client->SendRequest(write_request);
+
+    end_time = absl::Now();
+    elapsed_time = end_time - start_time;
+    LOG(INFO) << "write data, sendrequest "
+              << absl::ToDoubleMilliseconds(elapsed_time) << "ms";
     if (!respond_or.ok()) {
         LOG(ERROR) << "write file chunk respond is not ok, status: "
                    << respond_or.status().ToString();
@@ -356,7 +379,7 @@ bool DfsClientImpl::RegisterChunkServerFileServiceClient(
 }
 
 void DfsClientImpl::CacheToCacheManager(
-    const std::string& filename, const uint32_t& chunk_index,
+    const char* filename, const uint32_t& chunk_index,
     const protos::grpc::OpenFileRespond& respond) {
     const std::string& chunk_handle = respond.metadata().chunk_handle();
 
@@ -388,7 +411,7 @@ void DfsClientImpl::CacheToCacheManager(
 }
 
 google::protobuf::util::Status DfsClientImpl::GetChunkMetedata(
-    const std::string& filename, const size_t& chunk_index,
+    const char* filename, const size_t& chunk_index,
     const OpenFileRequest::OpenMode& openmode, std::string& chunk_handle,
     size_t& chunk_version, CacheManager::ChunkServerLocationEntry& entry) {
     bool metedata_in_cache = true;

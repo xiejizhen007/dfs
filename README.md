@@ -14,14 +14,6 @@
 - grpc_client，rpc 服务的客户端。
 - chunk_cache_manager，chunkserver 用于缓存数据，当 client 写入数据时，先将数据写入到 cache，然后根据 cache 数据与写入数据是否相同，来决定写入到 chunkserver。
 
-## commit message
-
-添加了数据块副本复制任务。
-
-在任务中，会检查数据副本数量，当副本数量低于预设值时，分配新的块服务器用于复制数据块副本。
-
-定时检测数据块副本数量，低于预设值时，会添加副本复制任务。
-
 ## TODO
 
 优化数据写入数据块的过程。

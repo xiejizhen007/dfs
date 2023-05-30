@@ -20,35 +20,35 @@ class DfsClientImpl {
    public:
     DfsClientImpl();
 
-    google::protobuf::util::Status CreateFile(const std::string& filename);
+    google::protobuf::util::Status CreateFile(const char* filename);
 
-    google::protobuf::util::Status DeleteFile(const std::string& filename);
+    google::protobuf::util::Status DeleteFile(const char* filename);
 
-    google::protobuf::util::StatusOr<std::pair<size_t, std::string>> ReadFile(
-        const std::string& filename, size_t offset, size_t nbytes);
+    google::protobuf::util::StatusOr<std::pair<size_t, void*>> ReadFile(
+        const char* filename, size_t offset, size_t nbytes);
 
     google::protobuf::util::StatusOr<size_t> WriteFile(
-        const std::string& filename, const std::string& data, size_t offset,
+        const char* filename, void* data, size_t offset,
         size_t nbytes);
 
    private:
     // cache metadata to cache manager
-    void CacheToCacheManager(const std::string& filename,
+    void CacheToCacheManager(const char* filename,
                              const uint32_t& chunk_index,
                              const protos::grpc::OpenFileRespond& respond);
 
     google::protobuf::util::Status GetChunkMetedata(
-        const std::string& filename, const size_t& chunk_index,
+        const char* filename, const size_t& chunk_index,
         const protos::grpc::OpenFileRequest::OpenMode& openmode,
         std::string& chunk_handle, size_t& chunk_version,
         CacheManager::ChunkServerLocationEntry& entry);
 
     google::protobuf::util::StatusOr<protos::grpc::ReadFileChunkRespond>
-    ReadFileChunk(const std::string& filename, size_t chunk_index,
+    ReadFileChunk(const char* filename, size_t chunk_index,
                   size_t offset, size_t nbytes);
 
     google::protobuf::util::StatusOr<protos::grpc::WriteFileChunkRespond>
-    WriteFileChunk(const std::string& filename, const std::string& data,
+    WriteFileChunk(const char* filename, void* data,
                    size_t chunk_index, size_t offset, size_t nbytes);
 
     std::shared_ptr<dfs::grpc_client::ChunkServerFileServiceClient>

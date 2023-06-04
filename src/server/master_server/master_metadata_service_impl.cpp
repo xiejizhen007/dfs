@@ -8,6 +8,8 @@ namespace server {
 
 using dfs::common::StatusProtobuf2Grpc;
 using dfs::grpc_client::ChunkServerFileServiceClient;
+using protos::grpc::AdjustFileChunkVersionRequest;
+using protos::grpc::AdjustFileChunkVersionRespond;
 using protos::grpc::GrantLeaseRequest;
 using protos::grpc::GrantLeaseRespond;
 using protos::grpc::InitFileChunkRequest;
@@ -107,6 +109,14 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkRead(
 grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     grpc::ServerContext* context, const protos::grpc::OpenFileRequest* request,
     protos::grpc::OpenFileRespond* respond) {
+    /**
+     * 当客户端发起写入请求时，主服务器确保客户端持有写入租约的情况下
+     * 更新主副本服务器上数据块的版本，随后调整主服务器的数据块版本
+     * 将更新后的块元数据返回给客户端。
+     *
+     * 主副本服务器在客户端写入数据后，会去同步其他副本服务器的数据，调整版本，更新数据等。
+     */
+
     auto start = std::chrono::high_resolution_clock::now();  // 记录开始时间
     // get the filename, chunk_index
     const std::string& filename = request->filename();
@@ -114,7 +124,7 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     LOG(INFO) << "Handle file write: " << filename
               << " chunk idx: " << chunk_index;
 
-    //
+    // 确保文件已经被创建
     if (!metadata_manager_->ExistFileMetadata(filename) &&
         !request->create_if_not_exists()) {
         LOG(ERROR) << "HandleFileChunkWrite: can't read file, no exist "
@@ -159,13 +169,26 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
     // 当前租约已分配
     bool lease_granted = false;
 
-    // try to get lease
-    auto lease_result_or = metadata_manager_->GetLeaseMetadata(chunk_handle);
-    if (lease_result_or.second) {
-        // 说明存在 chunk_handle 对应的租约
+    auto file_chunk_metadata_or =
+        metadata_manager_->GetFileChunkMetadata(chunk_handle);
+    if (!file_chunk_metadata_or.ok()) {
+        LOG(ERROR) << "no file chunk metadata for " << filename
+                   << ",index: " << chunk_index << ",handle: " << chunk_handle;
+        return dfs::common::StatusProtobuf2Grpc(
+            file_chunk_metadata_or.status());
+    }
+    // get file chunk metadata
+    protos::FileChunkMetadata file_chunk_metadata =
+        file_chunk_metadata_or.value();
+    const auto chunk_version = file_chunk_metadata.version();
 
-        if (absl::FromUnixSeconds(lease_result_or.first.second) > absl::Now()) {
-            if (context->peer() == lease_result_or.first.first) {
+    // try to get lease
+    auto lease_result_pair = metadata_manager_->GetLeaseMetadata(chunk_handle);
+    if (lease_result_pair.second) {
+        // 说明存在 chunk_handle 对应的租约
+        if (absl::FromUnixSeconds(lease_result_pair.first.second) >
+            absl::Now()) {
+            if (context->peer() == lease_result_pair.first.first) {
                 // 当前租约仍有效
                 LOG(INFO) << "lease " << chunk_handle << " is ok";
                 lease_granted = true;
@@ -182,23 +205,11 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
         }
     }
 
-    auto file_chunk_metadata_or =
-        metadata_manager_->GetFileChunkMetadata(chunk_handle);
-    if (!file_chunk_metadata_or.ok()) {
-        LOG(ERROR) << "no file chunk metadata for " << filename
-                   << ",index: " << chunk_index << ",handle: " << chunk_handle;
-        return dfs::common::StatusProtobuf2Grpc(
-            file_chunk_metadata_or.status());
-    }
-
-    // get file chunk metadata
-    protos::FileChunkMetadata respondMetadata = file_chunk_metadata_or.value();
-    const auto chunk_version = respondMetadata.version();
-
     if (!lease_granted) {
         // 需要分配新的租约
-        const std::string primary_server_address = std::move(
-            ChunkServerLocationToString(respondMetadata.primary_location()));
+        const std::string primary_server_address =
+            std::move(ChunkServerLocationToString(
+                file_chunk_metadata.primary_location()));
 
         if (primary_server_address.size() < 3) {
             LOG(ERROR) << "get chunk metadata primary location error";
@@ -216,11 +227,14 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
                                 "can not talk to lease service");
         }
 
+        LOG(INFO) << "try to talk to primary server: "
+                  << primary_server_address;
+
         // ok
         GrantLeaseRequest lease_req;
         lease_req.set_chunk_handle(chunk_handle);
         lease_req.set_chunk_version(chunk_version);
-        // use config
+        // TODO: use config
         uint64_t next_expire_time =
             absl::ToUnixSeconds(absl::Now() + absl::Seconds(60));
         lease_req.mutable_lease_expiration_time()->set_seconds(
@@ -228,11 +242,17 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
 
         auto lease_respond = lease_client->SendRequest(lease_req);
         if (lease_respond.ok()) {
-            LOG(INFO) << "get lease ok, status: "
-                      << lease_respond.value().status();
-            metadata_manager_->SetLeaseMetadata(chunk_handle, context->peer(),
-                                                next_expire_time);
-            lease_granted = true;
+            if (lease_respond.value().status() == GrantLeaseRespond::ACCEPTED) {
+                LOG(INFO) << "get lease ok, status: "
+                          << lease_respond.value().status();
+                metadata_manager_->SetLeaseMetadata(
+                    chunk_handle, context->peer(), next_expire_time);
+                lease_granted = true;
+            } else {
+                LOG(ERROR) << "can not get lease from primary server, because "
+                              "not ok, status: "
+                           << lease_respond.value().status();
+            }
         } else {
             LOG(ERROR) << "can not get lease from primary server, because "
                        << lease_respond.status().ToString();
@@ -247,30 +267,50 @@ grpc::Status MasterMetadataServiceImpl::HandleFileChunkWrite(
                             "can not grant lease for " + chunk_handle);
     }
 
+    // 调整版本
+    {
+        // talk to chunk server
+        const std::string primary_server_address =
+            std::move(ChunkServerLocationToString(
+                file_chunk_metadata.primary_location()));
+
+        auto primary_client =
+            chunk_server_manager_->GetOrCreateChunkServerFileServiceClient(
+                primary_server_address);
+
+        AdjustFileChunkVersionRequest version_req;
+        version_req.set_chunk_handle(chunk_handle);
+        version_req.set_new_chunk_version(chunk_version + 1);
+        auto version_respond_or = primary_client->SendRequest(version_req);
+        if (!version_respond_or.ok()) {
+            LOG(ERROR) << "can not adjust primary server chunk version";
+            return StatusProtobuf2Grpc(version_respond_or.status());
+        }
+
+        // 确保主副本服务器调整版本完成后，调整主服务器的块版本
+        auto inc_version_status =
+            metadata_manager_->IncFileChunkVersion(chunk_handle);
+        if (inc_version_status.ok()) {
+            LOG(INFO) << "inc chunk " << chunk_handle << " version, from "
+                      << chunk_version << "to " << chunk_version + 1;
+        } else {
+            LOG(ERROR) << "error in inc chunk version";
+            return StatusProtobuf2Grpc(inc_version_status);
+        }
+    }
+
     // get the chunk handle
     LOG(INFO) << "wirte: try to get chunk handle " << chunk_handle
               << " metadata";
     auto new_chunk_version = chunk_version + 1;
     LOG(INFO) << "respond metadata chunk_handle: "
-              << respondMetadata.chunk_handle();
-
-    // TODO: set up chunk server
-    for (const auto& location :
-         chunk_server_manager_->GetChunkLocation(chunk_handle)) {
-        const std::string server_address =
-            std::move(ChunkServerLocationToString(location));
-
-        LOG(INFO) << "store chunk_handle " << chunk_handle
-                  << " in server_address";
-
-        // auto client = GetChunkServerFileServiceClient(server_address);
-    }
+              << file_chunk_metadata.chunk_handle();
 
     respond->mutable_metadata()->set_chunk_handle(
-        respondMetadata.chunk_handle());
-    respond->mutable_metadata()->set_version(respondMetadata.version());
+        file_chunk_metadata.chunk_handle());
+    respond->mutable_metadata()->set_version(new_chunk_version);
     *respond->mutable_metadata()->mutable_primary_location() =
-        respondMetadata.primary_location();
+        file_chunk_metadata.primary_location();
     for (auto location :
          chunk_server_manager_->GetChunkLocation(chunk_handle)) {
         *respond->mutable_metadata()->add_locations() = location;

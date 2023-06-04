@@ -14,6 +14,7 @@ using dfs::common::StatusProtobuf2Grpc;
 using google::protobuf::util::IsAlreadyExists;
 using google::protobuf::util::IsNotFound;
 using protos::FileChunk;
+using protos::grpc::AdjustFileChunkVersionRequest;
 using protos::grpc::AdjustFileChunkVersionRespond;
 using protos::grpc::ApplyChunkReplicaCopyRequest;
 using protos::grpc::ApplyChunkReplicaCopyRespond;
@@ -198,6 +199,17 @@ grpc::Status ChunkServerFileServiceImpl::WriteFileChunk(
             continue;
         }
 
+        // 先调整版本
+        AdjustFileChunkVersionRequest adjust_version_request;
+        adjust_version_request.set_chunk_handle(
+            request->header().chunk_handle());
+        adjust_version_request.set_new_chunk_version(
+            request->header().version());
+
+        auto adjust_version_respond =
+            client->SendRequest(adjust_version_request);
+        // TODO: use adjust_version_respond
+
         ApplyMutationRequest apply_mutation_request;
         *apply_mutation_request.mutable_headers() = request->header();
         auto apply_mutation_respond =
@@ -314,7 +326,24 @@ grpc::Status ChunkServerFileServiceImpl::AdjustFileChunkVersion(
         auto version_or =
             file_chunk_manager()->GetChunkVersion(request->chunk_handle());
         if (version_or.ok()) {
+            // TODO:
+            // 如果当前存放的是老版本的数据块，更新其版本号，随后主副本服务器会发起数据块的更新
             // 数据块存在，说明是因为数据块版本不同步导致的数据写入错误
+
+            if (version_or.value() < old_version) {
+                auto update_version_again_status =
+                    file_chunk_manager()->UpdateChunkVersion(
+                        request->chunk_handle(), version_or.value(),
+                        request->new_chunk_version());
+                if (update_version_again_status.ok()) {
+                    LOG(INFO)
+                        << "chunk version is not sync, so update version, from "
+                        << version_or.value() << " to "
+                        << request->new_chunk_version();
+                    return grpc::Status::OK;
+                }
+            }
+
             LOG(ERROR) << "file chunk " << request->chunk_handle()
                        << " version is not sync, chunk server has version "
                        << version_or.value()

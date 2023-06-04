@@ -15,6 +15,7 @@ bool FileChunkManager::Initialize(const std::string& chunk_dbname,
     leveldb::DB* db;
     leveldb::Options options;
     options.create_if_missing = true;
+    options.write_buffer_size = max_bytes_per_chunk * 128;
     leveldb::Status status = leveldb::DB::Open(options, chunk_dbname, &db);
     if (!status.ok()) {
         return false;

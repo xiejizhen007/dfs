@@ -31,11 +31,13 @@ static void BM_GET_FILE_CHUNK_VALUE(benchmark::State& state) {
                                                   data.size(), data);
 
     for (auto _ : state) {
-        auto file_chunk_or = FileChunkManager::GetInstance()->GetFileChunk(chunk_handle);
+        state.PauseTiming();
+        auto file_chunk_or =
+            FileChunkManager::GetInstance()->GetFileChunk(chunk_handle);
         if (!file_chunk_or.ok()) {
             continue;
         }
-
+        state.ResumeTiming();
         auto file_chunk = file_chunk_or.value();
     }
 }
@@ -48,7 +50,8 @@ static void BM_FILE_CHUNK_REPLACE(benchmark::State& state) {
                                                   data.size(), data);
 
     for (auto _ : state) {
-        auto file_chunk_or = FileChunkManager::GetInstance()->GetFileChunk(chunk_handle);
+        auto file_chunk_or =
+            FileChunkManager::GetInstance()->GetFileChunk(chunk_handle);
         if (!file_chunk_or.ok()) {
             continue;
         }
@@ -91,20 +94,37 @@ static void BM_CHUNK_SERIALIZE_AS_STRING(benchmark::State& state) {
     chunk.set_data(data);
 
     for (auto _ : state) {
-        chunk.SerializeAsString();
+        auto str = chunk.SerializeAsString();
+    }
+}
+
+static void BM_CHUNK_PARSE_FROM_STRING(benchmark::State& state) {
+    const std::string data = std::string(chunk_block_size, '0');
+
+    protos::FileChunk chunk;
+    chunk.set_version(1);
+    chunk.set_data(data);
+    auto str = chunk.SerializeAsString();
+
+    for (auto _ : state) {
+        chunk.ParseFromString(str);
     }
 }
 
 static void BM_LEVELDB_WRITE(benchmark::State& state) {
+    leveldb::DestroyDB("benchmarks_leveldb", {});
     leveldb::DB* db;
     leveldb::Options options;
+    // options.write_buffer_size = (uint64_t)64 * 1024 * 1024;
+    // options.block_size = 4 << 20;
     options.create_if_missing = true;
     leveldb::Status status =
         leveldb::DB::Open(options, "benchmarks_leveldb", &db);
 
     // 写入数据
     std::string key = "BM_LEVELDB_WRITE";
-    const std::string data = std::string(chunk_block_size, '0');
+    size_t chunk_size = state.range(0);
+    const std::string data = std::string(chunk_size, '0');
 
     protos::FileChunk chunk;
     chunk.set_version(1);
@@ -112,20 +132,60 @@ static void BM_LEVELDB_WRITE(benchmark::State& state) {
 
     const std::string chunk_str = chunk.SerializeAsString();
 
+    auto write_opts = leveldb::WriteOptions{};
+    // write_opts.sync = false;
     for (auto _ : state) {
-        db->Put(leveldb::WriteOptions(), key, chunk_str);
+        db->Put(write_opts, key, chunk_str);
     }
 
     delete db;
 }
 
-BENCHMARK(BM_WRITE_TO_CHUNK)->Iterations(100);
-BENCHMARK(BM_GET_FILE_CHUNK)->Iterations(100);
-BENCHMARK(BM_GET_FILE_CHUNK_VALUE)->Iterations(100);
-BENCHMARK(BM_FILE_CHUNK_REPLACE)->Iterations(100);
-BENCHMARK(BM_WRITE_FILE_CHUNK)->Iterations(100);
-BENCHMARK(BM_CHUNK_SERIALIZE_AS_STRING)->Iterations(100);
-BENCHMARK(BM_LEVELDB_WRITE)->Iterations(100);
+// BENCHMARK(BM_WRITE_TO_CHUNK)->Iterations(100);
+// BENCHMARK(BM_GET_FILE_CHUNK)->Iterations(100);
+// BENCHMARK(BM_GET_FILE_CHUNK_VALUE)->Iterations(100);
+// BENCHMARK(BM_FILE_CHUNK_REPLACE)->Iterations(100);
+// BENCHMARK(BM_WRITE_FILE_CHUNK)->Iterations(100);
+// BENCHMARK(BM_CHUNK_SERIALIZE_AS_STRING)->Iterations(100);
+// BENCHMARK(BM_CHUNK_PARSE_FROM_STRING)->Iterations(100);
+BENCHMARK(BM_LEVELDB_WRITE)
+    ->Iterations(100)
+    // ->Arg(1 << 20)
+    // ->Arg(4 << 20)
+    // ->Arg(8 << 20)
+    // ->Arg(16 << 20)
+    // ->Arg(32 << 20)
+    ->Arg(64 << 20);
+
+void leveldb_write_test() {
+    leveldb::DestroyDB("benchmarks_leveldb", {});
+    leveldb::DB* db;
+    leveldb::Options options;
+    options.write_buffer_size = (uint64_t)64 * 1024 * 1024;
+    options.block_size = 4 << 20;
+    options.create_if_missing = true;
+    leveldb::Status status =
+        leveldb::DB::Open(options, "benchmarks_leveldb", &db);
+
+    // 写入数据
+    std::string key = "BM_LEVELDB_WRITE";
+    size_t chunk_size = 64 << 20;
+    const std::string data = std::string(chunk_size, '0');
+
+    protos::FileChunk chunk;
+    chunk.set_version(1);
+    chunk.set_data(data);
+
+    const std::string chunk_str = chunk.SerializeAsString();
+
+    auto write_opts = leveldb::WriteOptions{};
+    write_opts.sync = false;
+    while (1) {
+        db->Put(write_opts, key, chunk_str);
+    }
+
+    delete db;
+}
 
 int main(int argc, char** argv) {
     // 初始化配置
@@ -138,6 +198,8 @@ int main(int argc, char** argv) {
     // 运行基准测试
     benchmark::Initialize(&argc, argv);
     benchmark::RunSpecifiedBenchmarks();
+
+    // leveldb_write_test();
 
     return 0;
 }
